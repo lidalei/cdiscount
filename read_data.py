@@ -8,10 +8,11 @@ import matplotlib.pylab as plt
 import numpy as np
 import tensorflow as tf
 from tensorflow import gfile, logging
-
+from tensorflow.python.lib.io.python_io import TFRecordWriter
 
 DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
-TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.tfrecord'
+TRAIN_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train.tfrecord'
+TEST_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/test.tfrecord'
 CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
 NUM_CLASSES = 5270
 
@@ -59,27 +60,34 @@ class BsonReader(object):
             value = [value]
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
 
-    def convert_to_tfrecord(self, filename, category_id_mapping):
+    def convert_to_tfrecord(self, category_id_mapping,
+                            filenames=('train.tfrecord', 'validation.tfrecord'),
+                            ratios=(0.7, 0.2)):
         """
-        :param filename: The path to which the converted tfrecord file should be written.
         :param category_id_mapping: The mapping from category_id to class label (from 0 to 5269).
+        :param filenames: The path to which the converted tfrecord file should be written.
+        :param ratios: Splitting the whole dataset into train and validation.
+            How many examples should be in the validation set.
         :return:
         """
-        with tf.python_io.TFRecordWriter(filename) as tfwriter:
+        assert (len(filenames) == len(ratios)) and (len(ratios) == 2)
+        ratio = ratios[0] / sum(ratios)
+        with TFRecordWriter(filenames[0]) as tfwriter1, TFRecordWriter(filenames[1]) as tfwriter2:
             for c, d in enumerate(self.data):
                 feature = {
                     '_id': self._int64_feature(d['_id']),
-                    'category_id': self._int64_feature(category_id_mapping[d['category_id']]),
-                    # Use only the first picture
-                    'img': self._bytes_feature(d['imgs'][0]['picture'])
+                    'category_id': self._int64_feature(category_id_mapping[d['category_id']])
                 }
 
-                # for i, img in enumerate(d['imgs']):
-                #     feature['img{}'.format(i+1)] = img['picture']
+                for img in d['imgs']:
+                    feature['img'] = self._bytes_feature(img['picture'])
+                    example = tf.train.Example(features=tf.train.Features(feature=feature))
 
-                example = tf.train.Example(features=tf.train.Features(feature=feature))
+                    if np.random.rand(1) <= ratio:
+                        tfwriter1.write(example.SerializeToString())
+                    else:
+                        tfwriter2.write(example.SerializeToString())
 
-                tfwriter.write(example.SerializeToString())
         return True
 
 
@@ -174,7 +182,7 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threa
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.DEBUG)
-    """
+
     # Parse the mappings from category_id to category names in three levels.
     category = Category()
     print('{}: {}'.format(1000012776, category.get_name(1000012776)))
@@ -184,14 +192,16 @@ if __name__ == '__main__':
 
     # Convert bson file to tfrecord files
     bson_reader = BsonReader(DATA_FILE_NAME)
-    bson_reader.convert_to_tfrecord(TF_DATA_FILE_NAME, category_id_mapping)
-    """
+    bson_reader.convert_to_tfrecord(category_id_mapping,
+                                    filenames=(TRAIN_TF_DATA_FILE_NAME,
+                                               TEST_TF_DATA_FILE_NAME),
+                                    ratios=(0.7, 0.2))
 
     g = tf.Graph()
     with g.as_default() as g:
         tf_reader = DataTFReader(num_classes=NUM_CLASSES)
         id_batch, image_batch, label_batch = get_input_data_tensors(
-            tf_reader, data_pattern=TF_DATA_FILE_NAME, batch_size=100)
+            tf_reader, data_pattern=TRAIN_TF_DATA_FILE_NAME, batch_size=100)
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
                            name='init_glo_loc_var')
@@ -211,7 +221,8 @@ if __name__ == '__main__':
             while not coord.should_stop():
                 id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
                     [id_batch, image_batch, label_batch, summary_op])
-                logging.debug(id_batch_val, image_batch_val[0], label_batch_val)
+                logging.debug('id: {}, image: {}, label: {}'.format(
+                    id_batch_val, image_batch_val[0], label_batch_val))
                 summary_writer.add_summary(summary)
                 coord.request_stop()
         except tf.errors.OutOfRangeError:
