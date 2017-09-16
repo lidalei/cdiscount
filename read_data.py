@@ -11,6 +11,7 @@ from tensorflow import gfile, logging
 
 
 DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
+TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.tfrecord'
 CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
 NUM_CLASSES = 5270
 
@@ -172,6 +173,8 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threa
 
 
 if __name__ == '__main__':
+    tf.logging.set_verbosity(tf.logging.DEBUG)
+    """
     # Parse the mappings from category_id to category names in three levels.
     category = Category()
     print('{}: {}'.format(1000012776, category.get_name(1000012776)))
@@ -181,13 +184,14 @@ if __name__ == '__main__':
 
     # Convert bson file to tfrecord files
     bson_reader = BsonReader(DATA_FILE_NAME)
-    bson_reader.convert_to_tfrecord('/tmp/bson.tfrecord', category_id_mapping)
+    bson_reader.convert_to_tfrecord(TF_DATA_FILE_NAME, category_id_mapping)
+    """
 
     g = tf.Graph()
     with g.as_default() as g:
         tf_reader = DataTFReader(num_classes=NUM_CLASSES)
         id_batch, image_batch, label_batch = get_input_data_tensors(
-            tf_reader, data_pattern='/tmp/*.tfrecord', batch_size=100)
+            tf_reader, data_pattern=TF_DATA_FILE_NAME, batch_size=100)
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
                            name='init_glo_loc_var')
@@ -207,7 +211,7 @@ if __name__ == '__main__':
             while not coord.should_stop():
                 id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
                     [id_batch, image_batch, label_batch, summary_op])
-                print(id_batch_val, image_batch_val[0], label_batch_val)
+                logging.debug(id_batch_val, image_batch_val[0], label_batch_val)
                 summary_writer.add_summary(summary)
                 coord.request_stop()
         except tf.errors.OutOfRangeError:
