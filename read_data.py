@@ -180,23 +180,11 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threa
         return id_batch, image_batch, category_batch
 
 
-if __name__ == '__main__':
-    tf.logging.set_verbosity(tf.logging.DEBUG)
-
-    # Parse the mappings from category_id to category names in three levels.
-    category = Category()
-    print('{}: {}'.format(1000012776, category.get_name(1000012776)))
-    category_ids = category.mapping.keys()
-    print('category_id, max {}, min {}'.format(max(category_ids), min(category_ids)))
-    category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
-
-    # Convert bson file to tfrecord files
-    bson_reader = BsonReader(DATA_FILE_NAME)
-    bson_reader.convert_to_tfrecord(category_id_mapping,
-                                    filenames=(TRAIN_TF_DATA_FILE_NAME,
-                                               TEST_TF_DATA_FILE_NAME),
-                                    ratios=(0.7, 0.2))
-
+def train():
+    """
+    The training procedure.
+    :return:
+    """
     g = tf.Graph()
     with g.as_default() as g:
         tf_reader = DataTFReader(num_classes=NUM_CLASSES)
@@ -235,3 +223,24 @@ if __name__ == '__main__':
         coord.join(threads)
 
         summary_writer.close()
+
+
+if __name__ == '__main__':
+    tf.logging.set_verbosity(tf.logging.DEBUG)
+
+    """
+    # Parse the mappings from category_id to category names in three levels.
+    category = Category()
+    print('{}: {}'.format(1000012776, category.get_name(1000012776)))
+    category_ids = category.mapping.keys()
+    print('category_id, max {}, min {}'.format(max(category_ids), min(category_ids)))
+    category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
+
+    # Convert bson file to tfrecord files
+    bson_reader = BsonReader(DATA_FILE_NAME)
+    bson_reader.convert_to_tfrecord(category_id_mapping,
+                                    filenames=(TRAIN_TF_DATA_FILE_NAME,
+                                               TEST_TF_DATA_FILE_NAME),
+                                    ratios=(0.7, 0.2))
+    """
+    train()
