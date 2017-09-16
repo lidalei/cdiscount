@@ -105,9 +105,8 @@ class DataTFReader(object):
 
         img_id = features['_id']
 
-        origin_img = tf.image.decode_jpeg(features['img'], channels=3)
-
-        img = tf.image.resize_images(origin_img, [180, 180])
+        img = tf.image.decode_jpeg(features['img'], channels=3)
+        img.set_shape([180, 180, None])
 
         label = features['category_id']
 
