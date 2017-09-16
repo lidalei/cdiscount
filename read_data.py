@@ -5,9 +5,6 @@ From https://www.kaggle.com/inversion/processing-bson-files.
 import csv
 import bson
 import matplotlib.pylab as plt
-from skimage.data import imread
-import io
-import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow import gfile, logging
@@ -15,6 +12,7 @@ from tensorflow import gfile, logging
 
 DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
 CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
+NUM_CLASSES = 5270
 
 
 class Category(object):
@@ -63,6 +61,7 @@ class BsonReader(object):
     def convert_to_tfrecord(self, filename, category_id_mapping):
         """
         :param filename: The path to which the converted tfrecord file should be written.
+        :param category_id_mapping: The mapping from category_id to class label (from 0 to 5269).
         :return:
         """
         with tf.python_io.TFRecordWriter(filename) as tfwriter:
@@ -70,48 +69,56 @@ class BsonReader(object):
                 feature = {
                     '_id': self._int64_feature(d['_id']),
                     'category_id': self._int64_feature(category_id_mapping[d['category_id']]),
-                    'imgs': self._bytes_feature([img['picture'] for img in d['imgs']])
+                    # Use only the first picture
+                    'img': self._bytes_feature(d['imgs'][0]['picture'])
                 }
+
+                # for i, img in enumerate(d['imgs']):
+                #     feature['img{}'.format(i+1)] = img['picture']
 
                 example = tf.train.Example(features=tf.train.Features(feature=feature))
 
                 tfwriter.write(example.SerializeToString())
+        return True
 
 
 class DataTFReader(object):
     """
 
     """
-    def __init__(self, num_classes=5000):
+    def __init__(self, num_classes=NUM_CLASSES):
         self.num_classes = num_classes
 
     def prepare_reader(self, filename_queue, batch_size=1024, name='examples'):
         reader = tf.TFRecordReader()
         # read_up_to return (keys, values), whose shape is ([D], [D]).
         # serialized_examples is a 1-D string Tensor.
-        _, serialized_examples = reader.read_up_to(filename_queue, batch_size, name=name)
+        _, serialized_example = reader.read(filename_queue, name=name)
 
         feature_map = {
             '_id': tf.FixedLenFeature([], tf.int64),
             'category_id': tf.FixedLenFeature([], tf.int64),
-            'imgs': tf.VarLenFeature(tf.string)
+            'img': tf.FixedLenFeature([], tf.string)
         }
 
-        features = tf.parse_example(serialized_examples, features=feature_map)
+        features = tf.parse_single_example(serialized_example, features=feature_map)
 
-        ids = features['_id']
-        imgs = features['imgs']
-        # TODO
-        # imgs = tf.image.decode_jpeg(features['imgs'])
+        img_id = features['_id']
 
-        labels = features['category_id']
+        origin_img = tf.image.decode_jpeg(features['img'], channels=3)
 
-        one_hot_labels = tf.one_hot(labels, depth=self.num_classes, on_value=1, off_value=0, axis=-1)
+        img = tf.image.resize_images(origin_img, [180, 180])
 
-        return ids, imgs, one_hot_labels
+        label = features['category_id']
+
+        one_hot_label = tf.one_hot(label, depth=self.num_classes,
+                                   on_value=1.0, off_value=0.0,
+                                   dtype=tf.float32, axis=-1)
+
+        return img_id, img, one_hot_label
 
 
-def get_input_data_tensors(reader, data_pattern=None, batch_size=2048, num_threads=1, shuffle=False,
+def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threads=1, shuffle=False,
                            num_epochs=1, name_scope='input'):
     """Creates the section of the graph which reads the input data.
 
@@ -141,28 +148,28 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=2048, num_threa
         logging.info("Number of input files: {} within {}".format(len(files), name_scope))
         # Pass test data once. Thus, num_epochs is set as 1.
         filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs, shuffle=shuffle, capacity=32)
-        examples_and_labels = reader.prepare_reader(filename_queue)
+        example = reader.prepare_reader(filename_queue)
 
         # In shuffle_batch_join,
         # capacity must be larger than min_after_dequeue and the amount larger
         #   determines the maximum we will prefetch.  Recommendation:
         #   min_after_dequeue + (num_threads + a small safety margin) * batch_size
         if shuffle:
-            capacity = (num_threads + 1) * batch_size + 2048
-            id_batch, features_batch, labels_batch = (
-                tf.train.shuffle_batch(examples_and_labels, batch_size,
+            capacity = (num_threads + 1) * batch_size + 1024
+            id_batch, image_batch, category_batch = (
+                tf.train.shuffle_batch(example, batch_size,
                                        capacity, min_after_dequeue=batch_size,
                                        num_threads=num_threads,
-                                       enqueue_many=True))
+                                       enqueue_many=False))
         else:
-            capacity = num_threads * batch_size + 2048
-            id_batch, features_batch, labels_batch = (
-                tf.train.batch(examples_and_labels, batch_size, num_threads=num_threads,
+            capacity = num_threads * batch_size + 1024
+            id_batch, image_batch, category_batch = (
+                tf.train.batch(example, batch_size, num_threads=num_threads,
                                capacity=capacity,
                                allow_smaller_final_batch=True,
-                               enqueue_many=True))
+                               enqueue_many=False))
 
-        return id_batch, features_batch, labels_batch
+        return id_batch, image_batch, category_batch
 
 
 if __name__ == '__main__':
@@ -178,17 +185,20 @@ if __name__ == '__main__':
     bson_reader.convert_to_tfrecord('/tmp/bson.tfrecord', category_id_mapping)
 
     g = tf.Graph()
-
     with g.as_default() as g:
-        tf_reader = DataTFReader(num_classes=5000)
-        id_batch, features_batch, labels_batch = get_input_data_tensors(
-            tf_reader, data_pattern='/tmp/*.tfrecord', batch_size=10)
+        tf_reader = DataTFReader(num_classes=NUM_CLASSES)
+        id_batch, image_batch, label_batch = get_input_data_tensors(
+            tf_reader, data_pattern='/tmp/*.tfrecord', batch_size=100)
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
                            name='init_glo_loc_var')
 
+        summary_op = tf.summary.merge_all()
+
     with tf.Session(graph=g) as sess:
         sess.run(init_op)
+
+        summary_writer = tf.summary.FileWriter('/tmp', graph=sess.graph)
 
         # Start input enqueue threads.
         coord = tf.train.Coordinator()
@@ -196,8 +206,10 @@ if __name__ == '__main__':
 
         try:
             while not coord.should_stop():
-                id_batch_val, features_batch_val, labels_batch_val = sess.run([id_batch, features_batch, labels_batch])
-                print(id_batch_val, features_batch_val, labels_batch_val)
+                id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
+                    [id_batch, image_batch, label_batch, summary_op])
+                print(id_batch_val, image_batch_val[0], label_batch_val)
+                summary_writer.add_summary(summary)
                 coord.request_stop()
         except tf.errors.OutOfRangeError:
             logging.info('Finished normal equation terms computation -- one epoch done.')
@@ -207,3 +219,5 @@ if __name__ == '__main__':
 
         # Wait for threads to finish.
         coord.join(threads)
+
+        summary_writer.close()
