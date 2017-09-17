@@ -10,7 +10,7 @@ import tensorflow as tf
 from tensorflow import gfile, logging, flags, app
 from tensorflow.python.lib.io.python_io import TFRecordWriter
 
-DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
+BSON_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
 TRAIN_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train.tfrecord'
 VALIDATION_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/validation.tfrecord'
 CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
@@ -191,7 +191,7 @@ def convert_bson_to_tfrecord(unused_argv):
     category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
 
     # Convert bson file to tfrecord files
-    bson_reader = BsonReader(DATA_FILE_NAME)
+    bson_reader = BsonReader(BSON_DATA_FILE_NAME)
     bson_reader.convert_to_tfrecord(category_id_mapping,
                                     filenames=(FLAGS.train_data_pattern,
                                                FLAGS.validation_data_pattern),
@@ -245,6 +245,9 @@ def main():
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.DEBUG)
+
+    flags.DEFINE_string('bson_data_path', BSON_DATA_FILE_NAME,
+                        'The path to the bson data file.')
 
     flags.DEFINE_string('train_data_pattern', TRAIN_TF_DATA_FILE_NAME,
                         'The Glob pattern to training data tfrecord files.')
