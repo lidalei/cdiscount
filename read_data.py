@@ -20,10 +20,11 @@ FLAGS = flags.FLAGS
 
 
 class Category(object):
-    def __init__(self):
+    def __init__(self, path):
+        self.path = path
         self.mapping = dict()
         # Read the content of the csv file that defines the mapping from category id to name.
-        with open(CATEGORY_NAMES_FILE_NAME, newline='') as csv_file:
+        with open(self.path, newline='') as csv_file:
             reader = csv.DictReader(csv_file, delimiter=',')
             for row in reader:
                 category_id = int(row['category_id'])
@@ -184,14 +185,14 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threa
 
 def convert_bson_to_tfrecord(unused_argv):
     # Parse the mappings from category_id to category names in three levels.
-    category = Category()
+    category = Category(FLAGS.category_csv_path)
     print('{}: {}'.format(1000012776, category.get_name(1000012776)))
     category_ids = category.mapping.keys()
     print('category_id, max {}, min {}'.format(max(category_ids), min(category_ids)))
     category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
 
     # Convert bson file to tfrecord files
-    bson_reader = BsonReader(BSON_DATA_FILE_NAME)
+    bson_reader = BsonReader(FLAGS.bson_data_path)
     bson_reader.convert_to_tfrecord(category_id_mapping,
                                     filenames=(FLAGS.train_data_pattern,
                                                FLAGS.validation_data_pattern),
@@ -207,7 +208,7 @@ def main():
     with g.as_default() as g:
         tf_reader = DataTFReader(num_classes=NUM_CLASSES)
         id_batch, image_batch, label_batch = get_input_data_tensors(
-            tf_reader, data_pattern=TRAIN_TF_DATA_FILE_NAME, batch_size=100)
+            tf_reader, data_pattern=FLAGS.train_data_pattern, batch_size=100)
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
                            name='init_glo_loc_var')
@@ -245,6 +246,9 @@ def main():
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.DEBUG)
+
+    flags.DEFINE_string('category_csv_path', CATEGORY_NAMES_FILE_NAME,
+                        'The path to the category csv file.')
 
     flags.DEFINE_string('bson_data_path', BSON_DATA_FILE_NAME,
                         'The path to the bson data file.')
