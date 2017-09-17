@@ -15,8 +15,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import gfile, logging, flags, app
 from tensorflow.python.lib.io.python_io import TFRecordWriter
-from constants import NUM_CLASSES, CATEGORY_NAMES_FILE_NAME, BSON_DATA_FILE_NAME
+from constants import NUM_CLASSES, CATEGORY_NAMES_FILE_NAME, BSON_DATA_FILE_NAME, DataPipeline
 from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_TF_DATA_FILE_NAME
+from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS
 
 FLAGS = flags.FLAGS
 
@@ -26,7 +27,7 @@ class Category(object):
         self.path = path
         self.mapping = dict()
         # Read the content of the csv file that defines the mapping from category id to name.
-        with open(self.path, mode='rb', newline='') as csv_file:
+        with open(self.path, mode='r') as csv_file:
             reader = csv.DictReader(csv_file, delimiter=',')
             for row in reader:
                 category_id = int(row['category_id'])
@@ -51,7 +52,7 @@ class BsonReader(object):
         :param path: The path to the bson file.
         """
         self.path = path
-        self.data = bson.decode_file_iter(open(self.path, 'rb'))
+        self.data = bson.decode_file_iter(open(self.path, mode='rb'))
 
     @staticmethod
     def _int64_feature(value):
@@ -119,20 +120,31 @@ class DataTFReader(object):
 
         img_id = features['_id']
 
-        img = tf.image.decode_jpeg(features['img'], channels=3)
-        img.set_shape([180, 180, None])
+        img = tf.image.decode_jpeg(features['img'], channels=IMAGE_CHANNELS)
+        img.set_shape([IMAGE_HEIGHT, IMAGE_WIDTH, None])
 
         label = features['category_id']
 
-        one_hot_label = tf.one_hot(label, depth=self.num_classes,
-                                   on_value=1.0, off_value=0.0,
-                                   dtype=tf.float32, axis=-1)
+        # one_hot_label = tf.one_hot(label, depth=self.num_classes,
+        #                            on_value=1.0, off_value=0.0,
+        #                            dtype=tf.float32, axis=-1)
 
-        return img_id, img, one_hot_label
+        return img_id, img, label
 
 
-def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threads=1, shuffle=False,
-                           num_epochs=1, name_scope='input'):
+def get_input_data_tensors(data_pipeline, shuffle=False, num_epochs=1, name_scope='input'):
+    reader = data_pipeline.reader
+    data_pattern = data_pipeline.data_pattern
+    batch_size = data_pipeline.batch_size
+    num_threads = data_pipeline.num_threads
+
+    return _get_input_data_tensors(reader, data_pattern=data_pattern, batch_size=batch_size,
+                                   num_threads=num_threads, shuffle=shuffle,
+                                   num_epochs=num_epochs, name_scope=name_scope)
+
+
+def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threads=1,
+                            shuffle=False, num_epochs=1, name_scope='input'):
     """Creates the section of the graph which reads the input data.
 
     Similar to the same-name function in train.py.
@@ -173,6 +185,7 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threa
                 tf.train.shuffle_batch(example, batch_size,
                                        capacity, min_after_dequeue=batch_size,
                                        num_threads=num_threads,
+                                       allow_smaller_final_batch=True,
                                        enqueue_many=False))
         else:
             capacity = num_threads * batch_size + 1024
@@ -201,6 +214,50 @@ def convert_bson_to_tfrecord(unused_argv):
                                     ratios=(0.7, 0.2))
 
 
+def main(unused_argv):
+    """
+    The training procedure.
+    :return:
+    """
+    g = tf.Graph()
+    with g.as_default() as g:
+        reader = DataTFReader(num_classes=NUM_CLASSES)
+        id_batch, image_batch, label_batch = get_input_data_tensors(
+            DataPipeline(reader, FLAGS.train_data_pattern, 100, 1), shuffle=True)
+
+        init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
+                           name='init_glo_loc_var')
+
+        summary_op = tf.summary.merge_all()
+
+    with tf.Session(graph=g) as sess:
+        sess.run(init_op)
+
+        summary_writer = tf.summary.FileWriter('/tmp', graph=sess.graph)
+
+        # Start input enqueue threads.
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+        try:
+            while not coord.should_stop():
+                id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
+                    [id_batch, image_batch, label_batch, summary_op])
+                logging.debug('id: {}, image: {}, label: {}'.format(
+                    id_batch_val, image_batch_val[0], label_batch_val))
+                summary_writer.add_summary(summary)
+                coord.request_stop()
+        except tf.errors.OutOfRangeError:
+            logging.info('One epoch done.')
+        finally:
+            # When done, ask the threads to stop.
+            coord.request_stop()
+
+        # Wait for threads to finish.
+        coord.join(threads)
+
+        summary_writer.close()
+
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.DEBUG)
 
@@ -216,4 +273,4 @@ if __name__ == '__main__':
     flags.DEFINE_string('validation_data_pattern', VALIDATION_TF_DATA_FILE_NAME,
                         'The Glob pattern to validation data tfrecord files.')
 
-    app.run(main=convert_bson_to_tfrecord, argv=None)
+    app.run(convert_bson_to_tfrecord)
