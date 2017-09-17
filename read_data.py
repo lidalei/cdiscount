@@ -1,6 +1,12 @@
 """
 File is stored in bson format. It is supported by pymongo package.
 From https://www.kaggle.com/inversion/processing-bson-files.
+
+How to run the program.
+'python read_data.py --category_csv_path=/home/datasets/cdiscount/category_names.csv \
+--bson_data_path=/home/datasets/cdiscount/train.bson \
+--train_data_pattern=/home/datasets/cdiscount/train.tfrecord \
+--validation_data_pattern=/home/datasets/cdiscount/validation.tfrecord'
 """
 import csv
 import bson
@@ -9,12 +15,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import gfile, logging, flags, app
 from tensorflow.python.lib.io.python_io import TFRecordWriter
-
-BSON_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
-TRAIN_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train.tfrecord'
-VALIDATION_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/validation.tfrecord'
-CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
-NUM_CLASSES = 5270
+from constants import NUM_CLASSES, CATEGORY_NAMES_FILE_NAME, BSON_DATA_FILE_NAME
+from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_TF_DATA_FILE_NAME
 
 FLAGS = flags.FLAGS
 
@@ -24,7 +26,7 @@ class Category(object):
         self.path = path
         self.mapping = dict()
         # Read the content of the csv file that defines the mapping from category id to name.
-        with open(self.path, newline='') as csv_file:
+        with open(self.path, mode='rb', newline='') as csv_file:
             reader = csv.DictReader(csv_file, delimiter=',')
             for row in reader:
                 category_id = int(row['category_id'])
@@ -197,51 +199,6 @@ def convert_bson_to_tfrecord(unused_argv):
                                     filenames=(FLAGS.train_data_pattern,
                                                FLAGS.validation_data_pattern),
                                     ratios=(0.7, 0.2))
-
-
-def main():
-    """
-    The training procedure.
-    :return:
-    """
-    g = tf.Graph()
-    with g.as_default() as g:
-        tf_reader = DataTFReader(num_classes=NUM_CLASSES)
-        id_batch, image_batch, label_batch = get_input_data_tensors(
-            tf_reader, data_pattern=FLAGS.train_data_pattern, batch_size=100)
-
-        init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
-                           name='init_glo_loc_var')
-
-        summary_op = tf.summary.merge_all()
-
-    with tf.Session(graph=g) as sess:
-        sess.run(init_op)
-
-        summary_writer = tf.summary.FileWriter('/tmp', graph=sess.graph)
-
-        # Start input enqueue threads.
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-
-        try:
-            while not coord.should_stop():
-                id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
-                    [id_batch, image_batch, label_batch, summary_op])
-                logging.debug('id: {}, image: {}, label: {}'.format(
-                    id_batch_val, image_batch_val[0], label_batch_val))
-                summary_writer.add_summary(summary)
-                coord.request_stop()
-        except tf.errors.OutOfRangeError:
-            logging.info('Finished normal equation terms computation -- one epoch done.')
-        finally:
-            # When done, ask the threads to stop.
-            coord.request_stop()
-
-        # Wait for threads to finish.
-        coord.join(threads)
-
-        summary_writer.close()
 
 
 if __name__ == '__main__':
