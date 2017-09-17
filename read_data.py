@@ -7,14 +7,16 @@ import bson
 import matplotlib.pylab as plt
 import numpy as np
 import tensorflow as tf
-from tensorflow import gfile, logging
+from tensorflow import gfile, logging, flags, app
 from tensorflow.python.lib.io.python_io import TFRecordWriter
 
 DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
 TRAIN_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train.tfrecord'
-TEST_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/test.tfrecord'
+VALIDATION_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/validation.tfrecord'
 CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
 NUM_CLASSES = 5270
+
+FLAGS = flags.FLAGS
 
 
 class Category(object):
@@ -180,7 +182,23 @@ def get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threa
         return id_batch, image_batch, category_batch
 
 
-def train():
+def convert_bson_to_tfrecord(unused_argv):
+    # Parse the mappings from category_id to category names in three levels.
+    category = Category()
+    print('{}: {}'.format(1000012776, category.get_name(1000012776)))
+    category_ids = category.mapping.keys()
+    print('category_id, max {}, min {}'.format(max(category_ids), min(category_ids)))
+    category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
+
+    # Convert bson file to tfrecord files
+    bson_reader = BsonReader(DATA_FILE_NAME)
+    bson_reader.convert_to_tfrecord(category_id_mapping,
+                                    filenames=(FLAGS.train_data_pattern,
+                                               FLAGS.validation_data_pattern),
+                                    ratios=(0.7, 0.2))
+
+
+def main():
     """
     The training procedure.
     :return:
@@ -228,19 +246,10 @@ def train():
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.DEBUG)
 
-    """
-    # Parse the mappings from category_id to category names in three levels.
-    category = Category()
-    print('{}: {}'.format(1000012776, category.get_name(1000012776)))
-    category_ids = category.mapping.keys()
-    print('category_id, max {}, min {}'.format(max(category_ids), min(category_ids)))
-    category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
+    flags.DEFINE_string('train_data_pattern', TRAIN_TF_DATA_FILE_NAME,
+                        'The Glob pattern to training data tfrecord files.')
 
-    # Convert bson file to tfrecord files
-    bson_reader = BsonReader(DATA_FILE_NAME)
-    bson_reader.convert_to_tfrecord(category_id_mapping,
-                                    filenames=(TRAIN_TF_DATA_FILE_NAME,
-                                               TEST_TF_DATA_FILE_NAME),
-                                    ratios=(0.7, 0.2))
-    """
-    train()
+    flags.DEFINE_string('validation_data_pattern', VALIDATION_TF_DATA_FILE_NAME,
+                        'The Glob pattern to validation data tfrecord files.')
+
+    app.run(main=convert_bson_to_tfrecord, argv=None)
