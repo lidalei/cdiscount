@@ -104,7 +104,7 @@ class DataTFReader(object):
     def __init__(self, num_classes=NUM_CLASSES):
         self.num_classes = num_classes
 
-    def prepare_reader(self, filename_queue, batch_size=1024, name='examples'):
+    def prepare_reader(self, filename_queue, batch_size=1024, onehot_label=False, name='examples'):
         reader = tf.TFRecordReader()
         # read_up_to return (keys, values), whose shape is ([D], [D]).
         # serialized_examples is a 1-D string Tensor.
@@ -125,26 +125,30 @@ class DataTFReader(object):
 
         label = features['category_id']
 
-        # one_hot_label = tf.one_hot(label, depth=self.num_classes,
-        #                            on_value=1.0, off_value=0.0,
-        #                            dtype=tf.float32, axis=-1)
+        if onehot_label:
+            one_hot_label = tf.one_hot(label, depth=self.num_classes,
+                                       on_value=1.0, off_value=0.0,
+                                       dtype=tf.float32, axis=-1)
 
-        return img_id, img, label
+            return img_id, img, one_hot_label
+        else:
+            return img_id, img, label
 
 
-def get_input_data_tensors(data_pipeline, shuffle=False, num_epochs=1, name_scope='input'):
+def get_input_data_tensors(data_pipeline, onehot_label=False,
+                           shuffle=False, num_epochs=1, name_scope='input'):
     reader = data_pipeline.reader
     data_pattern = data_pipeline.data_pattern
     batch_size = data_pipeline.batch_size
     num_threads = data_pipeline.num_threads
 
     return _get_input_data_tensors(reader, data_pattern=data_pattern, batch_size=batch_size,
-                                   num_threads=num_threads, shuffle=shuffle,
-                                   num_epochs=num_epochs, name_scope=name_scope)
+                                   num_threads=num_threads, onehot_label=onehot_label,
+                                   shuffle=shuffle, num_epochs=num_epochs, name_scope=name_scope)
 
 
 def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threads=1,
-                            shuffle=False, num_epochs=1, name_scope='input'):
+                            onehot_label=False, shuffle=False, num_epochs=1, name_scope='input'):
     """Creates the section of the graph which reads the input data.
 
     Similar to the same-name function in train.py.
@@ -153,6 +157,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         data_pattern: A 'glob' style path to the data files.
         batch_size: How many examples to process at a time.
         num_threads: How many I/O threads to use.
+        onehot_label: Whether return onehot encoded label.
         shuffle: Boolean argument indicating whether shuffle examples.
         num_epochs: How many passed to go through the data files.
         name_scope: An identifier of this code.
@@ -165,15 +170,16 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         IOError: If no files matching the given pattern were found.
     """
     # Adapted from namesake function in inference.py.
-    with tf.name_scope(name_scope):
+    with tf.name_scope(name_scope), tf.device('/cpu:0'):
         # Glob() can be replace with tf.train.match_filenames_once(), which is an operation.
         files = gfile.Glob(data_pattern)
         if not files:
             raise IOError("Unable to find input files. data_pattern='{}'".format(data_pattern))
         logging.info("Number of input files: {} within {}".format(len(files), name_scope))
-        # Pass test data once. Thus, num_epochs is set as 1.
-        filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs, shuffle=shuffle, capacity=32)
-        example = reader.prepare_reader(filename_queue)
+        # Pass test data num_epochs.
+        filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs,
+                                                        shuffle=shuffle, capacity=32)
+        example = reader.prepare_reader(filename_queue, onehot_label=onehot_label)
 
         # In shuffle_batch_join,
         # capacity must be larger than min_after_dequeue and the amount larger
