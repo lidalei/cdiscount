@@ -87,8 +87,10 @@ class LogisticRegression(object):
         pred_prob = tf.nn.softmax(logits, name='pred_probability')
 
         with tf.name_scope('train'):
-            loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=labels_batch, logits=logits, name='x_entropy')
+            loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=labels_batch, logits=logits, name='x_entropy_per_example')
+
+            loss = tf.reduce_mean(loss_per_example, name='x_entropy')
 
             tf.summary.scalar('loss/xentropy', loss)
 
