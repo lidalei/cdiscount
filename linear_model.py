@@ -213,7 +213,6 @@ class LogisticRegression(object):
         reader = train_data_pipeline.reader
         batch_size = train_data_pipeline.batch_size
         num_classes = reader.num_classes
-        logging.info('Logistic regression uses {}-dimensional features.'.format(raw_feature_size))
 
         self.train_data_pipeline = train_data_pipeline
         self.raw_feature_size = raw_feature_size
@@ -244,6 +243,8 @@ class LogisticRegression(object):
             logging.debug('Data transform arguments are {}.'.format(self.tr_data_paras))
         else:
             self.tr_data_paras = dict()
+
+        logging.info('Logistic regression uses {}-dimensional features.'.format(self.feature_size))
 
         start_new_model = start_new_model or (not tf.gfile.Exists(self.logdir))
 

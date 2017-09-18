@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow import flags, logging, app
 
 from read_data import DataTFReader
-from constants import NUM_CLASSES, DataPipeline, ConvFilterShape
+from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline, ConvFilterShape
 from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_TF_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
@@ -142,7 +142,7 @@ def main(unused_argv):
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
-                start_new_model=FLAGS.start_new_model,
+                start_new_model=FLAGS.start_new_model, decay_steps=NUM_TRAIN_IMAGES,
                 tr_data_fn=tr_data_conv_fn, tr_data_paras=tr_data_paras)
 
 

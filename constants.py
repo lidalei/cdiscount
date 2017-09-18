@@ -2,6 +2,7 @@ import tensorflow as tf
 from collections import namedtuple
 
 
+NUM_TRAIN_IMAGES = 12371293
 NUM_CLASSES = 5270
 CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
 BSON_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
