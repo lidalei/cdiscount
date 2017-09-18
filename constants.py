@@ -14,6 +14,7 @@ IMAGE_CHANNELS = 3
 IMAGE_SIZE = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_CHANNELS
 
 DataPipeline = namedtuple('DataPipeline', ['reader', 'data_pattern', 'batch_size', 'num_threads'])
+ConvFilterShape = namedtuple('ConvFilterShape', ['filter_height', 'filter_width', 'in_channels', 'out_channels'])
 
 
 def make_summary(name, value):
