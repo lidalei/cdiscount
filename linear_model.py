@@ -116,18 +116,18 @@ class LogisticRegression(object):
             final_loss = tf.add(loss, reg_loss, name='final_loss')
 
         with tf.name_scope('optimization'):
-            # RMSPropOptimizer
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
             # Decayed learning rate.
-            # rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            # adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate, rough_num_examples_processed,
-            #                                                 self.decay_steps, self.decay_rate, staircase=True,
-            #                                                 name='adap_learning_rate')
-            # tf.summary.scalar('learning_rate', adap_learning_rate)
+            rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
+            adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate, rough_num_examples_processed,
+                                                            self.decay_steps, self.decay_rate, staircase=True,
+                                                            name='adap_learning_rate')
+            tf.summary.scalar('learning_rate', adap_learning_rate)
             # GradientDescentOptimizer
-            # optimizer = tf.train.GradientDescentOptimizer(adap_learning_rate)
+            optimizer = tf.train.GradientDescentOptimizer(adap_learning_rate)
             # MomentumOptimizer
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
+            # RMSPropOptimizer
+            # optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
             train_op = optimizer.minimize(final_loss, global_step=global_step)
 
         summary_op = tf.summary.merge_all()
