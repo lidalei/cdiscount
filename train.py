@@ -27,7 +27,7 @@ def main(unused_argv):
 
     tr_data_paras = {'reshape': True, 'size': IMAGE_SIZE}
 
-    log_reg = LogisticRegression()
+    log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline, raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                 start_new_model=FLAGS.start_new_model, tr_data_fn=tr_data_fn,  tr_data_paras=tr_data_paras)
 
@@ -46,5 +46,7 @@ if __name__ == '__main__':
                         'The Glob pattern to validation data tfrecord files.')
 
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
+
+    flags.DEFINE_string('logdir', '/tmp/log_reg', 'The log dir to log events and checkpoints.')
 
     app.run()

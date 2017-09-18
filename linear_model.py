@@ -190,7 +190,7 @@ class LogisticRegression(object):
 
     def fit(self, train_data_pipeline, raw_feature_size, start_new_model=False,
             tr_data_fn=None, tr_data_paras=None,
-            init_learning_rate=0.01, decay_steps=40000, decay_rate=0.95, epochs=None,
+            init_learning_rate=0.001, decay_steps=40000, decay_rate=0.95, epochs=None,
             l1_reg_rate=None, l2_reg_rate=None, pos_weights=None):
         """
         Logistic regression fit function.
