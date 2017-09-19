@@ -1,13 +1,17 @@
 import tensorflow as tf
 from collections import namedtuple
+from os.path import join as path_join
 
 
 NUM_TRAIN_IMAGES = 12371293
 NUM_CLASSES = 5270
-CATEGORY_NAMES_FILE_NAME = '/Users/Sophie/Documents/cdiscount/category_names.csv'
-BSON_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train_example.bson'
-TRAIN_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/train.tfrecord'
-VALIDATION_TF_DATA_FILE_NAME = '/Users/Sophie/Documents/cdiscount/validation.tfrecord'
+
+DATA_SET_FOLDER = '/Users/Sophie/Documents/cdiscount/'
+CATEGORY_NAMES_FILE_NAME = path_join(DATA_SET_FOLDER, 'category_names.csv')
+BSON_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train_example.bson')
+TRAIN_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train.tfrecord')
+VALIDATION_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'validation.tfrecord')
+TEST_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'test.tfrecord')
 
 IMAGE_WIDTH = 180
 IMAGE_HEIGHT = 180
