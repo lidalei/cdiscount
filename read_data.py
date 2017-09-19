@@ -216,12 +216,14 @@ def convert_bson_to_tfrecord(unused_argv):
     print('category_id, max {}, min {}'.format(max(category_ids), min(category_ids)))
     category_id_mapping = dict(zip(sorted(category_ids), range(len(category_ids))))
 
+    ratios = [float(e) for e in FLAGS.train_val_ratios.split(',')]
+
     # Convert bson file to tfrecord files
     bson_reader = BsonReader(FLAGS.bson_data_path)
     bson_reader.convert_to_tfrecord(category_id_mapping,
                                     filenames=(FLAGS.train_data_pattern,
                                                FLAGS.validation_data_pattern),
-                                    ratios=(0.7, 0.2))
+                                    ratios=ratios)
 
 
 def main(unused_argv):
@@ -282,5 +284,8 @@ if __name__ == '__main__':
 
     flags.DEFINE_string('validation_data_pattern', VALIDATION_TF_DATA_FILE_NAME,
                         'The Glob pattern to validation data tfrecord files.')
+
+    flags.DEFINE_string('train_val_ratios', '0.7,0.2',
+                        'The percentage of train and validation partition.')
 
     app.run(convert_bson_to_tfrecord)
