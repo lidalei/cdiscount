@@ -10,6 +10,7 @@ from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 from linear_model import LogisticRegression
 
 from functools import reduce
+from operator import mul
 
 
 FLAGS = flags.FLAGS
@@ -32,7 +33,7 @@ def weight_variable(shape, regularization=False, name='weights'):
         shape = [shape.filter_height, shape.filter_width, shape.in_channels, shape.out_channels]
 
     # filter_height * filter_width * in_channels
-    fan_in = reduce(lambda x, y: x * y, shape, 1)
+    fan_in = reduce(mul, shape[:-1], 1)
 
     initial = tf.truncated_normal(shape, stddev=1.0 / np.sqrt(fan_in))
 
@@ -137,13 +138,15 @@ def main(unused_argv):
     train_data_pipeline = DataPipeline(reader=reader, data_pattern=FLAGS.train_data_pattern,
                                        batch_size=FLAGS.batch_size, num_threads=FLAGS.num_threads)
 
-    tr_data_paras = {'reshape': True, 'size': 1024}
+    # Change Me!
+    tr_data_fn = flatten
+    tr_data_paras = {'reshape': True, 'size': IMAGE_SIZE}
 
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                 start_new_model=FLAGS.start_new_model, decay_steps=NUM_TRAIN_IMAGES,
-                tr_data_fn=tr_data_conv_fn, tr_data_paras=tr_data_paras)
+                tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras)
 
 
 if __name__ == '__main__':
