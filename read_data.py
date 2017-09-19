@@ -80,6 +80,10 @@ class BsonReader(object):
         ratio = ratios[0] / sum(ratios)
         with TFRecordWriter(filenames[0]) as tfwriter1, TFRecordWriter(filenames[1]) as tfwriter2:
             for c, d in enumerate(self.data):
+                # Test dataset.
+                if 'category_id' not in d:
+                    d['category_id'] = -1
+
                 feature = {
                     '_id': self._int64_feature(d['_id']),
                     'category_id': self._int64_feature(category_id_mapping[d['category_id']])
