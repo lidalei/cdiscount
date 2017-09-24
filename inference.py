@@ -122,8 +122,8 @@ class BootstrapInference(object):
                     batch_predictions_mean_prob = np.mean(np.stack(batch_pred_prob_list, axis=0), axis=0)
                     # Write batch predictions to files.
                     # TODO, one product has multiple images
-                    ids_val.append(id_batch_val)
-                    pred_probs_val.append(batch_predictions_mean_prob)
+                    ids_val.extend(id_batch_val)
+                    pred_probs_val.extend(batch_predictions_mean_prob)
 
                     now = time.time()
                     processing_count += 1
@@ -140,11 +140,7 @@ class BootstrapInference(object):
             # Wait for threads to finish.
             coord.join(threads)
 
-            # Combine ids and deal with duplicates
-            all_ids = np.concatenate(ids_val, axis=0)
-            all_pred_probs = np.concatenate(pred_probs_val, axis=0)
-
-            id_category_rdd = self.sc.parallelize(zip(all_ids, all_pred_probs))
+            id_category_rdd = self.sc.parallelize(zip(ids_val, pred_probs_val))
 
             id_ped_labels = id_category_rdd.aggregateByKey(
                 [np.zeros([NUM_CLASSES], dtype=np.float32), 0.0],
@@ -193,7 +189,7 @@ if __name__ == '__main__':
                         TEST_TF_DATA_FILE_NAME,
                         'Test data pattern, to be specified when making predictions.')
 
-    flags.DEFINE_integer('batch_size', 2048, 'Size of batch processing.')
+    flags.DEFINE_integer('batch_size', 512, 'Size of batch processing.')
     flags.DEFINE_integer('num_threads', 2, 'Number of readers to form a batch.')
 
     # Separated by , (csv separator), e.g., log_reg,conv_net. Used in bagging.
