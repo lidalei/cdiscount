@@ -77,6 +77,11 @@ class BootstrapInference(object):
         for sess in self.sess_list:
             sess.close()
 
+    @staticmethod
+    def majority_voting(array):
+        unique_vals, counts = np.unique(array, return_counts=True)
+        return unique_vals[np.argmax(counts)]
+
     def transform(self, test_data_pipeline, out_file_location):
         test_graph = tf.Graph()
         with test_graph.as_default():
@@ -120,10 +125,11 @@ class BootstrapInference(object):
                         batch_pred_prob_list.append(batch_pred_prob)
 
                     batch_predictions_mean_prob = np.mean(np.stack(batch_pred_prob_list, axis=0), axis=0)
+                    batch_predictions = np.argmax(batch_predictions_mean_prob, axis=-1)
                     # Write batch predictions to files.
                     # TODO, one product has multiple images
                     ids_val.extend(id_batch_val)
-                    pred_probs_val.extend(batch_predictions_mean_prob)
+                    pred_probs_val.extend(batch_predictions)
 
                     now = time.time()
                     processing_count += 1
@@ -142,11 +148,11 @@ class BootstrapInference(object):
 
             id_category_rdd = self.sc.parallelize(zip(ids_val, pred_probs_val))
 
+            # Append and extend return None!!! Instead, use + which returns a new list.
             id_ped_labels = id_category_rdd.aggregateByKey(
-                [np.zeros([NUM_CLASSES], dtype=np.float32), 0.0],
-                lambda x, y: [np.add(x[0], y), x[1] + 1.0],
-                lambda x, y: [np.add(x[0], y[0]), x[1] + y[1]]).mapValues(
-                lambda x: np.argmax(np.divide(x[0], x[1]), axis=-1)).sortByKey().collect()
+                list(),
+                lambda x, y: x + [y],
+                lambda x, y: x + y).mapValues(self.majority_voting).sortByKey().collect()
 
             # Don't put write into foreach loop, for it does  not work.
             for id_pred_label in id_ped_labels:
