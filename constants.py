@@ -94,4 +94,4 @@ def convert_to_pickle(tf_file, filename):
             imgs.append(image)
 
     with open(filename, mode='wb') as pickle_f:
-        pickle_dump((imgs, labels), pickle_f)
+        pickle_dump((np.array(imgs, dtype=np.uint8), np.array(labels, dtype=np.int32)), pickle_f)
