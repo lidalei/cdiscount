@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from collections import namedtuple
 from os.path import join as path_join
@@ -29,4 +30,15 @@ def make_summary(name, value):
     val.tag = str(name)
     val.simple_value = float(value)
     return summary
+
+
+def compute_accuracy(labels=None, predictions=None):
+    """
+    Compute accuracy for a batch of labels and predictions.
+    Each element is treated as an example.
+    :param labels: The true labels.
+    :param predictions: The predicted labels.
+    :return: The accuracy.
+    """
+    return np.sum(np.equal(labels, predictions)) / np.size(labels)
 
