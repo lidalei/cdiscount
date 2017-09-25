@@ -3,3 +3,11 @@
 *.pyc
 
 sample_submission.csv
+
+train.tfrecord
+
+validation.tfrecord
+
+test.tfrecord
+
+validation.pickle
