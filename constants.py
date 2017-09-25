@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from collections import namedtuple
 from os.path import join as path_join
+from pickle import dump as pickle_dump
 
 from tensorflow.python.lib.io.tf_record import TFRecordWriter
 
@@ -14,6 +15,8 @@ BSON_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train_example.bson')
 TRAIN_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train.tfrecord')
 VALIDATION_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'validation.tfrecord')
 TEST_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'test.tfrecord')
+
+VALIDATION_PICKLE_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'validation.pickle')
 
 IMAGE_WIDTH = 180
 IMAGE_HEIGHT = 180
@@ -68,3 +71,27 @@ def random_split_tf_record(file, filenames, ratios=(0.5, 0.5)):
 
         tfwriter1.flush()
         tfwriter2.flush()
+
+
+def convert_to_pickle(tf_file, filename):
+    imgs = []
+    labels = []
+    # No need to perform initialization in this simple program
+    with tf.Graph().as_default() as g:
+        pl = tf.placeholder(tf.string, shape=[])
+        img = tf.image.decode_jpeg(pl, channels=3)
+        img.set_shape([180, 180, None])
+
+    with tf.Session(graph=g) as sess:
+        for example in tf.python_io.tf_record_iterator(tf_file):
+            feature = tf.train.Example.FromString(example).features.feature
+
+            label = feature['category_id'].int64_list.value[0]
+            labels.append(label)
+
+            raw_img = feature['img'].bytes_list.value[0]
+            image = sess.run(img, feed_dict={pl: raw_img})
+            imgs.append(image)
+
+    with open(filename, mode='wb') as pickle_f:
+        pickle_dump((imgs, labels), pickle_f)
