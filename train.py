@@ -1,10 +1,11 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow import flags, logging, app
+from pickle import load as pickle_load
 
 from read_data import DataTFReader
-from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline, ConvFilterShape
-from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_TF_DATA_FILE_NAME
+from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline, ConvFilterShape, compute_accuracy
+from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
 from linear_model import LogisticRegression
@@ -16,7 +17,7 @@ from operator import mul
 FLAGS = flags.FLAGS
 
 
-def flatten(input_val, **kwargs):
+def log_reg(input_val, **kwargs):
     with tf.name_scope('reshape'):
         return tf.reshape(tf.cast(input_val, tf.float32), [-1, IMAGE_SIZE])
 
@@ -135,18 +136,23 @@ def main(unused_argv):
     :return:
     """
     reader = DataTFReader(num_classes=NUM_CLASSES)
+
+    with open(FLAGS.validation_data_file, 'rb') as pickle_f:
+        val_data, val_labels = pickle_load(pickle_f)
+
     train_data_pipeline = DataPipeline(reader=reader, data_pattern=FLAGS.train_data_pattern,
                                        batch_size=FLAGS.batch_size, num_threads=FLAGS.num_threads)
 
     # Change Me!
-    tr_data_fn = flatten
-    tr_data_paras = {'reshape': True, 'size': IMAGE_SIZE}
+    tr_data_fn = tr_data_conv_fn
+    tr_data_paras = {'reshape': True, 'size': 1024}
 
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                 start_new_model=FLAGS.start_new_model, decay_steps=NUM_TRAIN_IMAGES,
-                tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras)
+                tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
+                validation_set=(val_data, val_labels), validation_fn=compute_accuracy)
 
 
 if __name__ == '__main__':
@@ -159,8 +165,8 @@ if __name__ == '__main__':
 
     flags.DEFINE_integer('num_threads', 2, 'The number of threads to read the tfrecord file.')
 
-    flags.DEFINE_string('validation_data_pattern', VALIDATION_TF_DATA_FILE_NAME,
-                        'The Glob pattern to validation data tfrecord files.')
+    flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
+                        'The pickle file which stores the validation set.')
 
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
 

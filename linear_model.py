@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import logging
 
-# from constants import make_summary
+from constants import make_summary
 from read_data import get_input_data_tensors
 
 
@@ -42,6 +42,7 @@ class LogisticRegression(object):
         self.labels_batch = None
         self.loss = None
         self.pred_prob = None
+        self.pred_labels = None
 
     def _build_graph(self):
         """
@@ -60,6 +61,7 @@ class LogisticRegression(object):
 
         global_step = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='global_step')
 
+        # Get training data
         id_batch, raw_features_batch, labels_batch = (
             get_input_data_tensors(self.train_data_pipeline, shuffle=True, num_epochs=self.epochs,
                                    name_scope='input'))
@@ -85,6 +87,8 @@ class LogisticRegression(object):
         logits = tf.add(tf.matmul(transformed_features_batch, weights), biases, name='logits')
 
         pred_prob = tf.nn.softmax(logits, name='pred_probability')
+
+        pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
 
         with tf.name_scope('train'):
             loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -147,7 +151,8 @@ class LogisticRegression(object):
         tf.add_to_collection('raw_features_batch', raw_features_batch)
         tf.add_to_collection('labels_batch', labels_batch)
         tf.add_to_collection('loss', loss)
-        tf.add_to_collection('predictions', pred_prob)
+        tf.add_to_collection('pred_prob', pred_prob)
+        tf.add_to_collection('pred_labels', pred_labels)
 
         # To save global variables and savable objects, i.e., var_list is None.
         # Using rbf transform will also save centers and scaling factors.
@@ -184,12 +189,12 @@ class LogisticRegression(object):
                 True if graph and all graph ops are not None, otherwise False.
             """
             graph_ops = [self.saver, self.global_step, self.init_op, self.train_op, self.summary_op,
-                         self.raw_features_batch, self.labels_batch, self.loss, self.pred_prob]
+                         self.raw_features_batch, self.labels_batch, self.loss, self.pred_prob, self.pred_labels]
 
             return (self.graph is not None) and (graph_ops.count(None) == 0)
 
     def fit(self, train_data_pipeline, raw_feature_size, start_new_model=False,
-            tr_data_fn=None, tr_data_paras=None,
+            tr_data_fn=None, tr_data_paras=None, validation_set=None, validation_fn=None,
             init_learning_rate=0.001, decay_steps=40000, decay_rate=0.95, epochs=None,
             l1_reg_rate=None, l2_reg_rate=None, pos_weights=None):
         """
@@ -200,6 +205,8 @@ class LogisticRegression(object):
             start_new_model: If True, start a new model instead of restoring from existing checkpoints.
             tr_data_fn: a function that transforms input data.
             tr_data_paras: Other parameters should be passed to tr_data_fn. A dictionary.
+            validation_set: A tuple contains the validation features and labels.
+            validation_fn: The function to compute validation metric.
             init_learning_rate: Decayed gradient descent parameter.
             decay_steps: Decayed gradient descent parameter.
             decay_rate: Decayed gradient descent parameter.
@@ -281,7 +288,8 @@ class LogisticRegression(object):
             self.raw_features_batch = tf.get_collection('raw_features_batch')[0]
             self.labels_batch = tf.get_collection('labels_batch')[0]
             self.loss = tf.get_collection('loss')[0]
-            self.pred_prob = tf.get_collection('predictions')[0]
+            self.pred_prob = tf.get_collection('pred_prob')[0]
+            self.pred_labels = tf.get_collection('pred_labels')[0]
 
         if self._check_graph_initialized():
             logging.info('Succeeded to initialize logistic regression Graph.')
@@ -297,19 +305,79 @@ class LogisticRegression(object):
         with sv.managed_session() as sess:
             logging.info("Entering training loop...")
             for step in range(self.max_train_steps):
-                if sv.should_stop():
-                    # Save the final model and break.
-                    self.saver.save(sess, save_path='{}_{}'.format(sv.save_path, 'final'))
-                    break
+                if step % 500 == 0:
+                    if validation_fn is not None:
+                        val_func_name = validation_fn.__name__
 
-                if step % 100 == 0:
+                        _, summary, train_pred_labels_batch, train_labels_batch, global_step_val = sess.run(
+                            [self.train_op, self.summary_op, self.pred_labels, self.labels_batch, self.global_step])
+
+                        # Evaluate on train data.
+                        train_per = validation_fn(predictions=train_pred_labels_batch, labels=train_labels_batch)
+                        sv.summary_writer.add_summary(
+                            make_summary('train/{}'.format(val_func_name), train_per),
+                            global_step_val)
+                        print('Step {}, train {}: {}.'.format(global_step_val, val_func_name, train_per))
+                    else:
+                        _, summary, global_step_val = sess.run(
+                            [self.train_op, self.summary_op, self.global_step])
+
+                    # Add train summary.
+                    sv.summary_computed(sess, summary, global_step=global_step_val)
+
+                    # Compute validation loss and performance (validation_fn).
+                    if validation_set is not None:
+                        val_data, val_labels = validation_set
+
+                        # Compute validation loss.
+                        num_val_images = len(val_labels)
+                        split_indices = np.linspace(0, num_val_images, max(num_val_images // (2 * batch_size), 2),
+                                                    dtype=np.int32)
+
+                        val_loss_vals, val_pred_labels = [], []
+                        for i in range(len(split_indices) - 1):
+                            start_ind = split_indices[i]
+                            end_ind = split_indices[i + 1]
+
+                            if validation_fn is not None:
+                                ith_val_loss_val, ith_pred_labels = sess.run(
+                                    [self.loss, self.pred_labels], feed_dict={
+                                        self.raw_features_batch: val_data[start_ind:end_ind],
+                                        self.labels_batch: val_labels[start_ind:end_ind]})
+
+                                val_pred_labels.append(ith_pred_labels)
+                            else:
+                                ith_val_loss_val = sess.run(
+                                    self.loss, feed_dict={
+                                        self.raw_features_batch: val_data[start_ind:end_ind],
+                                        self.labels_batch: val_labels[start_ind:end_ind]})
+
+                            val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
+
+                        val_loss_val = sum(val_loss_vals) / num_val_images
+                        # Add validation summary.
+                        sv.summary_writer.add_summary(
+                            make_summary('validation/xentropy', val_loss_val), global_step_val)
+
+                        if validation_fn is not None:
+                            val_func_name = validation_fn.__name__
+                            val_per = validation_fn(predictions=np.concatenate(val_pred_labels, axis=0),
+                                                    labels=val_labels)
+
+                            sv.summary_writer.add_summary(
+                                make_summary('validation/{}'.format(val_func_name), val_per),
+                                global_step_val)
+                            print('Step {}, validation {}: {}.'.format(global_step_val,
+                                                                              val_func_name, val_per))
+
+                elif step % 200 == 0:
                     _, summary, global_step_val = sess.run(
                         [self.train_op, self.summary_op, self.global_step])
                     sv.summary_computed(sess, summary, global_step=global_step_val)
                 else:
                     sess.run(self.train_op)
 
-            logging.info("Exited training loop.")
+        logging.info("Exited training loop.")
 
         # Session will close automatically when with clause exits.
         # sess.close()
