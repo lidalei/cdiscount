@@ -17,7 +17,7 @@ from operator import mul
 FLAGS = flags.FLAGS
 
 
-def log_reg(input_val, **kwargs):
+def tr_log_reg_fn(input_val, **kwargs):
     with tf.name_scope('reshape'):
         return tf.reshape(tf.cast(input_val, tf.float32), [-1, IMAGE_SIZE])
 
@@ -39,9 +39,9 @@ def weight_variable(shape, regularization=False, name='weights'):
     initial = tf.truncated_normal(shape, stddev=1.0 / np.sqrt(fan_in))
 
     weights = tf.Variable(initial_value=initial, name=name)
+    tf.summary.histogram('model/weights', weights)
     if regularization:
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weights)
-        tf.summary.histogram('model/weights', weights)
 
     return weights
 
@@ -57,8 +57,10 @@ def bias_variable(shape, name='biases'):
 
     # A small positive initial values to avoid dead neurons.
     initial = tf.constant(0.1, shape=shape)
+    biases = tf.Variable(initial_value=initial, name=name)
+    tf.summary.histogram('model/biases', biases)
 
-    return tf.Variable(initial_value=initial, name=name)
+    return biases
 
 
 def create_conv_layer(input_val, filter_shape, strides, name):
@@ -150,7 +152,7 @@ def main(unused_argv):
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
-                start_new_model=FLAGS.start_new_model, decay_steps=NUM_TRAIN_IMAGES,
+                start_new_model=FLAGS.start_new_model, decay_steps=NUM_TRAIN_IMAGES * 8,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy)
 
