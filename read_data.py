@@ -115,33 +115,40 @@ class DataTFReader(object):
 
     def prepare_reader(self, filename_queue, batch_size=1024, onehot_label=False, name='examples'):
         reader = tf.TFRecordReader()
-        # read_up_to return (keys, values), whose shape is ([D], [D]).
-        # serialized_examples is a 1-D string Tensor.
-        _, serialized_example = reader.read(filename_queue, name=name)
-
         feature_map = {
             '_id': tf.FixedLenFeature([], tf.int64),
             'category_id': tf.FixedLenFeature([], tf.int64),
             'img': tf.FixedLenFeature([], tf.string)
         }
+        # Read a single example.
+        # _, serialized_example = reader.read(filename_queue, name=name)
+        # features = tf.parse_single_example(serialized_example, features=feature_map)
+        # img_id = features['_id']
+        # img = tf.image.decode_jpeg(features['img'], channels=IMAGE_CHANNELS)
+        # img.set_shape([IMAGE_HEIGHT, IMAGE_WIDTH, None])
+        # label = features['category_id']
 
-        features = tf.parse_single_example(serialized_example, features=feature_map)
+        # read_up_to return (keys, values), whose shape is ([D], [D]).
+        # serialized_examples is a 1-D string Tensor.
+        _, serialized_examples = reader.read_up_to(filename_queue, batch_size, name=name)
+        features = tf.parse_example(serialized_examples, features=feature_map)
+        img_ids = features['_id']
 
-        img_id = features['_id']
+        # Users must provide dtype if it is different from the data type of elems.
+        imgs = tf.map_fn(lambda img: tf.image.decode_jpeg(img, channels=IMAGE_CHANNELS), features['img'],
+                         dtype=tf.uint8)
+        imgs.set_shape([None, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS])
 
-        img = tf.image.decode_jpeg(features['img'], channels=IMAGE_CHANNELS)
-        img.set_shape([IMAGE_HEIGHT, IMAGE_WIDTH, None])
-
-        label = features['category_id']
+        labels = features['category_id']
 
         if onehot_label:
-            one_hot_label = tf.one_hot(label, depth=self.num_classes,
-                                       on_value=1.0, off_value=0.0,
-                                       dtype=tf.float32, axis=-1)
+            one_hot_labels = tf.one_hot(labels, depth=self.num_classes,
+                                        on_value=1.0, off_value=0.0,
+                                        dtype=tf.float32, axis=-1)
 
-            return img_id, img, one_hot_label
+            return img_ids, imgs, one_hot_labels
         else:
-            return img_id, img, label
+            return img_ids, imgs, labels
 
 
 def get_input_data_tensors(data_pipeline, onehot_label=False,
@@ -188,7 +195,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         # Pass test data num_epochs.
         filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs,
                                                         shuffle=shuffle, capacity=32)
-        example = reader.prepare_reader(filename_queue, onehot_label=onehot_label)
+        examples = reader.prepare_reader(filename_queue, onehot_label=onehot_label)
 
         # In shuffle_batch_join,
         # capacity must be larger than min_after_dequeue and the amount larger
@@ -197,18 +204,18 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         if shuffle:
             capacity = (num_threads + 2) * batch_size
             id_batch, image_batch, category_batch = (
-                tf.train.shuffle_batch(example, batch_size,
+                tf.train.shuffle_batch(examples, batch_size,
                                        capacity, min_after_dequeue=batch_size,
                                        num_threads=num_threads,
                                        allow_smaller_final_batch=True,
-                                       enqueue_many=False))
+                                       enqueue_many=True))
         else:
             capacity = (num_threads + 1) * batch_size
             id_batch, image_batch, category_batch = (
-                tf.train.batch(example, batch_size, num_threads=num_threads,
+                tf.train.batch(examples, batch_size, num_threads=num_threads,
                                capacity=capacity,
                                allow_smaller_final_batch=True,
-                               enqueue_many=False))
+                               enqueue_many=True))
 
         return id_batch, image_batch, category_batch
 
