@@ -61,7 +61,7 @@ class BootstrapInference(object):
                 pre_trained_saver.restore(sess, latest_checkpoint)
                 # Get collections to be used in making predictions for test data.
                 img_input_batch = tf.get_collection('raw_features_batch')[0]
-                pred_prob = tf.get_collection('predictions')[0]
+                pred_prob = tf.get_collection('pred_prob')[0]
                 phase_train_pl = tf.get_collection('phase_train_pl')
 
                 # Append session and input and predictions.
@@ -124,12 +124,12 @@ class BootstrapInference(object):
                         ))
                         batch_pred_prob_list.append(batch_pred_prob)
 
-                    batch_predictions_mean_prob = np.mean(np.stack(batch_pred_prob_list, axis=0), axis=0)
-                    batch_predictions = np.argmax(batch_predictions_mean_prob, axis=-1)
+                    batch_pred_mean_prob = np.mean(np.stack(batch_pred_prob_list, axis=0), axis=0)
+                    batch_pred = np.argmax(batch_pred_mean_prob, axis=-1)
                     # Write batch predictions to files.
-                    # TODO, one product has multiple images
+                    # Be cautious! One product can have multiple images
                     ids_val.extend(id_batch_val)
-                    pred_probs_val.extend(batch_predictions)
+                    pred_probs_val.extend(batch_pred)
 
                     now = time.time()
                     processing_count += 1
