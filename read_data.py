@@ -25,6 +25,7 @@ FLAGS = flags.FLAGS
 class Category(object):
     def __init__(self, path):
         self.path = path
+        # Mapping rom category_id to three-level names
         self.mapping = dict()
         # Read the content of the csv file that defines the mapping from category id to name.
         with open(self.path, mode='r') as csv_file:
@@ -77,6 +78,9 @@ class BsonReader(object):
         :return:
         """
         assert (len(filenames) == len(ratios)) and (len(ratios) == 2)
+        if tf.gfile.Exists(filenames[0]) or tf.gfile.Exists(filenames[1]):
+            raise FileExistsError('File exists. Continuing will overwrite it. Abort!')
+
         ratio = ratios[0] / sum(ratios)
         with TFRecordWriter(filenames[0]) as tfwriter1, TFRecordWriter(filenames[1]) as tfwriter2:
             for c, d in enumerate(self.data):
