@@ -46,6 +46,8 @@ def compute_accuracy(labels=None, predictions=None):
     """
     return np.sum(np.equal(labels, predictions)) / np.size(labels)
 
+compute_accuracy.__name__ = 'accuracy'
+
 
 def random_split_tf_record(file, filenames, ratios=(0.5, 0.5)):
     """
