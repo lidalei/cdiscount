@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow import flags, logging, app
+from tensorflow.contrib import slim
 from pickle import load as pickle_load
 
 from read_data import DataTFReader
@@ -9,6 +10,8 @@ from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
 from linear_model import LogisticRegression
+
+import inception_resnet_v2 as inception
 
 from functools import reduce
 from operator import mul
@@ -132,6 +135,24 @@ def tr_data_conv_fn(input_val, **kwargs):
     return fc1
 
 
+def transfer_learn_inception_resnet_v2(inputs, **kwargs):
+    """
+    Fine-tune the inception residual net
+    :param inputs: The features batch, dimension [batch_size x height x width x channels]
+    :return: The flattened just before the softmax layer.
+    """
+    arg_scope = inception.inception_resnet_v2_arg_scope()
+    with slim.arg_scope(arg_scope):
+        # num_classes is not used here, keep it small.
+        # If output_stride is 8, create_aux_logits. If 16, not create_aux_logits.
+        logits, end_points = inception.inception_resnet_v2(inputs, num_classes=2,
+                                                           is_training=True,
+                                                           create_aux_logits=False)
+        tr_features = end_points['PreLogitsFlatten']
+
+        return tr_features
+
+
 def main(unused_argv):
     """
     The training procedure.
@@ -146,8 +167,10 @@ def main(unused_argv):
                                        batch_size=FLAGS.batch_size, num_threads=FLAGS.num_threads)
 
     # Change Me!
-    tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 1024}
+    tr_data_fn = transfer_learn_inception_resnet_v2
+    # If output_stride is 16, 4 * 4 * 1536, Conv2d_7b_1x1
+    # If output_stride is 8, 10 * 10 * 1088, PreAuxlogits
+    tr_data_paras = {'reshape': True, 'size': 4 * 4 * 1536}
 
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
@@ -163,14 +186,14 @@ if __name__ == '__main__':
     flags.DEFINE_string('train_data_pattern', TRAIN_TF_DATA_FILE_NAME,
                         'The Glob pattern to training data tfrecord files.')
 
-    flags.DEFINE_integer('batch_size', 128, 'The training batch size.')
+    flags.DEFINE_integer('batch_size', 32, 'The training batch size.')
 
     flags.DEFINE_integer('num_threads', 2, 'The number of threads to read the tfrecord file.')
 
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
-    flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
+    flags.DEFINE_bool('start_new_model', False, 'Whether to start a new model.')
 
     flags.DEFINE_string('logdir', '/tmp/log_reg', 'The log dir to log events and checkpoints.')
 
