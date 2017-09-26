@@ -175,9 +175,10 @@ def main(unused_argv):
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
-                start_new_model=FLAGS.start_new_model, decay_steps=NUM_TRAIN_IMAGES * 8,
+                start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
-                validation_set=(val_data, val_labels), validation_fn=compute_accuracy)
+                validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
+                init_learning_rate=0.00001, decay_steps=NUM_TRAIN_IMAGES * 2)
 
 
 if __name__ == '__main__':
