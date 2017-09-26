@@ -11,3 +11,7 @@ validation.tfrecord
 test.tfrecord
 
 validation.pickle
+
+inception_v3.ckpt
+
+inceptionv3/checkpoint.txt
