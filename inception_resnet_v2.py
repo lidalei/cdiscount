@@ -27,7 +27,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-slim = tf.contrib.slim
+from tensorflow.contrib import slim
 
 
 def block35(net, scale=1.0, activation_fn=tf.nn.relu, scope=None, reuse=None):
@@ -319,6 +319,7 @@ def inception_resnet_v2(inputs, num_classes=1001, is_training=True,
                                                scope='Logits')
                     end_points['AuxLogits'] = aux
 
+            # (1 x 1 x 1536)
             with tf.variable_scope('Logits'):
                 net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
                                       scope='AvgPool_1a_8x8')

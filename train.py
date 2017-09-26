@@ -80,6 +80,7 @@ def create_conv_layer(input_val, filter_shape, strides, name):
 
 
 def tr_data_conv_fn(input_val, **kwargs):
+    # Do not forget to cast images to float type.
     value = tf.cast(input_val, tf.float32)
     all_strides = []
     # Convolutional layer 1.
@@ -143,9 +144,11 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
     """
     arg_scope = inception.inception_resnet_v2_arg_scope()
     with slim.arg_scope(arg_scope):
+        # Do not forget to cast images to float type.
+        input_val = tf.cast(inputs, tf.float32)
         # num_classes is not used here, keep it small.
         # If output_stride is 8, create_aux_logits. If 16, not create_aux_logits.
-        logits, end_points = inception.inception_resnet_v2(inputs, num_classes=2,
+        logits, end_points = inception.inception_resnet_v2(input_val, num_classes=2,
                                                            is_training=True,
                                                            create_aux_logits=False)
         tr_features = end_points['PreLogitsFlatten']
@@ -168,9 +171,9 @@ def main(unused_argv):
 
     # Change Me!
     tr_data_fn = transfer_learn_inception_resnet_v2
-    # If output_stride is 16, 4 * 4 * 1536, Conv2d_7b_1x1
-    # If output_stride is 8, 10 * 10 * 1088, PreAuxlogits
-    tr_data_paras = {'reshape': True, 'size': 4 * 4 * 1536}
+    # If output_stride is 16, 1536, Conv2d_7b_1x1
+    # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
+    tr_data_paras = {'reshape': True, 'size': 1536}
 
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
@@ -194,7 +197,7 @@ if __name__ == '__main__':
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
-    flags.DEFINE_bool('start_new_model', False, 'Whether to start a new model.')
+    flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
 
     flags.DEFINE_string('logdir', '/tmp/log_reg', 'The log dir to log events and checkpoints.')
 

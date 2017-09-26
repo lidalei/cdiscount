@@ -196,7 +196,8 @@ class LogisticRegression(object):
     def fit(self, train_data_pipeline, raw_feature_size, start_new_model=False,
             tr_data_fn=None, tr_data_paras=None, validation_set=None, validation_fn=None,
             init_learning_rate=0.0001, decay_steps=40000, decay_rate=0.95, epochs=None,
-            l1_reg_rate=None, l2_reg_rate=None, pos_weights=None):
+            l1_reg_rate=None, l2_reg_rate=None, pos_weights=None,
+            pretrained_saver=None, pretrained_checkpoint=None):
         """
         Logistic regression fit function.
         Args:
@@ -215,6 +216,8 @@ class LogisticRegression(object):
             l2_reg_rate: l2 regularization rate.
             pos_weights: For imbalanced binary classes. Here, num_pos << num_neg, the weights should be > 1.0.
                 If None, treated as 1.0 for all binary classifiers.
+            pretrained_saver: The saver used to restore the variables stored in pretrained_checkpoint.
+            pretrained_checkpoint: If not None, restore (partial) variables from it.
         Returns: None.
         """
         reader = train_data_pipeline.reader
@@ -296,15 +299,24 @@ class LogisticRegression(object):
         else:
             logging.error('Failed to initialize logistic regression Graph.')
 
+        # Used for restoring pretrained model
+        def load_pre_train_model():
+            if pretrained_saver and pretrained_checkpoint:
+                return lambda s: pretrained_saver.restore(s, pretrained_checkpoint)
+            else:
+                return None
         # Start or restore training.
         # To avoid summary causing memory usage peak, manually save summaries.
         sv = tf.train.Supervisor(graph=self.graph, init_op=self.init_op, logdir=self.logdir,
                                  global_step=self.global_step, summary_op=None,
-                                 save_model_secs=600, saver=self.saver)
+                                 save_model_secs=600, saver=self.saver,
+                                 init_fn=load_pre_train_model())
 
         with sv.managed_session() as sess:
             logging.info("Entering training loop...")
             for step in range(self.max_train_steps):
+                if sv.should_stop():
+                    break
                 if step % 500 == 0:
                     if validation_fn is not None:
                         val_func_name = validation_fn.__name__
@@ -367,8 +379,7 @@ class LogisticRegression(object):
                             sv.summary_writer.add_summary(
                                 make_summary('validation/{}'.format(val_func_name), val_per),
                                 global_step_val)
-                            print('Step {}, validation {}: {}.'.format(global_step_val,
-                                                                              val_func_name, val_per))
+                            print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
 
                 elif step % 200 == 0:
                     _, summary, global_step_val = sess.run(
