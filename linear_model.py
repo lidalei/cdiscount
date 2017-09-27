@@ -31,6 +31,13 @@ class LogisticRegression(object):
         self.l2_reg_rate = None
         self.pos_weights = None
 
+        # Whether to use a pretrained model
+        self.use_pretrain = False
+        self.pretrained_model = None
+        self.pretrained_saver = None
+        self.pretrained_model_dir = None
+        self.pretrained_scope = None
+
         self.graph = None
         # Member variables associated with graph.
         self.saver = None
@@ -80,11 +87,11 @@ class LogisticRegression(object):
         tf.summary.histogram('model/biases', biases)
 
         if self.tr_data_fn is None:
-            transformed_features_batch = tf.identity(raw_features_batch)
+            tr_features_batch = tf.identity(raw_features_batch)
         else:
-            transformed_features_batch = self.tr_data_fn(raw_features_batch, **self.tr_data_paras)
+            tr_features_batch = self.tr_data_fn(raw_features_batch, **self.tr_data_paras)
 
-        logits = tf.add(tf.matmul(transformed_features_batch, weights), biases, name='logits')
+        logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
 
         pred_prob = tf.nn.softmax(logits, name='pred_probability')
 
@@ -188,16 +195,32 @@ class LogisticRegression(object):
             Return:
                 True if graph and all graph ops are not None, otherwise False.
             """
-            graph_ops = [self.saver, self.global_step, self.init_op, self.train_op, self.summary_op,
-                         self.raw_features_batch, self.labels_batch, self.loss, self.pred_prob, self.pred_labels]
+            graph_ops = [self.saver, self.global_step, self.init_op, self.train_op,
+                         self.summary_op, self.raw_features_batch, self.labels_batch, self.loss,
+                         self.pred_prob, self.pred_labels]
 
             return (self.graph is not None) and (graph_ops.count(None) == 0)
+
+    # Used for restoring pretrained model
+    def _load_pre_train_model(self):
+        if self.use_pretrain:
+            # Load pre-trained graph.
+            self.pretrained_checkpoint = tf.train.latest_checkpoint(self.pretrained_model_dir)
+            logging.info("Pretrained checkpoint: {}".format(self.pretrained_checkpoint))
+            self.pretrained_saver = tf.train.Saver(
+                var_list=self.graph.get_collection(
+                    tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
+                    tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope))
+
+            return lambda s: self.pretrained_saver.restore(s, self.pretrained_checkpoint)
+        else:
+            return None
 
     def fit(self, train_data_pipeline, raw_feature_size, start_new_model=False,
             tr_data_fn=None, tr_data_paras=None, validation_set=None, validation_fn=None,
             init_learning_rate=0.0001, decay_steps=40000, decay_rate=0.95, epochs=None,
             l1_reg_rate=None, l2_reg_rate=None, pos_weights=None,
-            pretrained_saver=None, pretrained_checkpoint=None):
+            use_pretrain=False, pretrained_model_dir=None, pretrained_scope=None):
         """
         Logistic regression fit function.
         Args:
@@ -216,8 +239,9 @@ class LogisticRegression(object):
             l2_reg_rate: l2 regularization rate.
             pos_weights: For imbalanced binary classes. Here, num_pos << num_neg, the weights should be > 1.0.
                 If None, treated as 1.0 for all binary classifiers.
-            pretrained_saver: The saver used to restore the variables stored in pretrained_checkpoint.
-            pretrained_checkpoint: If not None, restore (partial) variables from it.
+            use_pretrain: Whether to use pretrained model.
+            pretrained_model_dir: The folder that contains the pretrained model.
+            pretrained_scope: The scope to hold the pretrained model.
         Returns: None.
         """
         reader = train_data_pipeline.reader
@@ -238,6 +262,9 @@ class LogisticRegression(object):
         self.l1_reg_rate = l1_reg_rate
         self.l2_reg_rate = l2_reg_rate
         self.pos_weights = pos_weights
+        self.use_pretrain = use_pretrain
+        self.pretrained_model_dir = pretrained_model_dir
+        self.pretrained_scope = pretrained_scope
 
         # Check extra data transform function arguments.
         # If transform changes the features size, change it.
@@ -299,18 +326,12 @@ class LogisticRegression(object):
         else:
             logging.error('Failed to initialize logistic regression Graph.')
 
-        # Used for restoring pretrained model
-        def load_pre_train_model():
-            if pretrained_saver and pretrained_checkpoint:
-                return lambda s: pretrained_saver.restore(s, pretrained_checkpoint)
-            else:
-                return None
         # Start or restore training.
         # To avoid summary causing memory usage peak, manually save summaries.
         sv = tf.train.Supervisor(graph=self.graph, init_op=self.init_op, logdir=self.logdir,
                                  global_step=self.global_step, summary_op=None,
                                  save_model_secs=600, saver=self.saver,
-                                 init_fn=load_pre_train_model())
+                                 init_fn=self._load_pre_train_model())
 
         with sv.managed_session() as sess:
             logging.info("Entering training loop...")
@@ -343,7 +364,7 @@ class LogisticRegression(object):
 
                         # Compute validation loss.
                         num_val_images = len(val_labels)
-                        split_indices = np.linspace(0, num_val_images, max(num_val_images // (2 * batch_size), 2),
+                        split_indices = np.linspace(0, num_val_images, max(num_val_images // batch_size, 2),
                                                     dtype=np.int32)
 
                         val_loss_vals, val_pred_labels = [], []

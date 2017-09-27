@@ -329,12 +329,13 @@ def inception_resnet_v2(inputs, num_classes=1001, is_training=True,
                                    scope='Dropout')
 
                 end_points['PreLogitsFlatten'] = net
-                logits = slim.fully_connected(net, num_classes, activation_fn=None,
-                                              scope='Logits')
-                end_points['Logits'] = logits
-                end_points['Predictions'] = tf.nn.softmax(logits, name='Predictions')
+                # Remove the ordinary softmax layer.
+                # logits = slim.fully_connected(net, num_classes, activation_fn=None,
+                #                               scope='Logits')
+                # end_points['Logits'] = logits
+                # end_points['Predictions'] = tf.nn.softmax(logits, name='Predictions')
 
-        return logits, end_points
+        return None, end_points
 
 
 # inception_resnet_v2.default_image_size = 299

@@ -5,7 +5,8 @@ from tensorflow.contrib import slim
 from pickle import load as pickle_load
 
 from read_data import DataTFReader
-from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline, ConvFilterShape, compute_accuracy
+from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline
+from constants import ConvFilterShape, compute_accuracy
 from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
@@ -34,7 +35,8 @@ def weight_variable(shape, regularization=False, name='weights'):
     :return: Variable corresponding to the kernel map or template.
     """
     if isinstance(shape, ConvFilterShape):
-        shape = [shape.filter_height, shape.filter_width, shape.in_channels, shape.out_channels]
+        shape = [shape.filter_height, shape.filter_width,
+                 shape.in_channels, shape.out_channels]
 
     # filter_height * filter_width * in_channels
     fan_in = reduce(mul, shape[:-1], 1)
@@ -121,7 +123,8 @@ def tr_data_conv_fn(input_val, **kwargs):
         width = np.ceil(float(width) / float(e[2]))
 
     conv_out_size = int(height * width * channels)
-    logging.info('Convolutional layers output {}-dimensional feature.'.format(conv_out_size))
+    logging.info('Convolutional layers output {}-dimensional feature.'.format(
+        conv_out_size))
 
     # Flatten the feature maps
     output = tf.reshape(activation2, [-1, conv_out_size])
@@ -139,7 +142,8 @@ def tr_data_conv_fn(input_val, **kwargs):
 def transfer_learn_inception_resnet_v2(inputs, **kwargs):
     """
     Fine-tune the inception residual net
-    :param inputs: The features batch, dimension [batch_size x height x width x channels]
+    :param inputs: The features batch,
+        dimension [batch_size x height x width x channels]
     :return: The flattened just before the softmax layer.
     """
     arg_scope = inception.inception_resnet_v2_arg_scope()
@@ -148,9 +152,8 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
         input_val = tf.cast(inputs, tf.float32)
         # num_classes is not used here, keep it small.
         # If output_stride is 8, create_aux_logits. If 16, not create_aux_logits.
-        logits, end_points = inception.inception_resnet_v2(input_val, num_classes=2,
-                                                           is_training=True,
-                                                           create_aux_logits=False)
+        _, end_points = inception.inception_resnet_v2(
+            input_val, is_training=True, create_aux_logits=False)
         tr_features = end_points['PreLogitsFlatten']
 
         return tr_features
@@ -166,8 +169,10 @@ def main(unused_argv):
     with open(FLAGS.validation_data_file, 'rb') as pickle_f:
         val_data, val_labels = pickle_load(pickle_f)
 
-    train_data_pipeline = DataPipeline(reader=reader, data_pattern=FLAGS.train_data_pattern,
-                                       batch_size=FLAGS.batch_size, num_threads=FLAGS.num_threads)
+    train_data_pipeline = DataPipeline(reader=reader,
+                                       data_pattern=FLAGS.train_data_pattern,
+                                       batch_size=FLAGS.batch_size,
+                                       num_threads=FLAGS.num_threads)
 
     # Change Me!
     tr_data_fn = transfer_learn_inception_resnet_v2
@@ -181,7 +186,9 @@ def main(unused_argv):
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
-                init_learning_rate=0.00001, decay_steps=NUM_TRAIN_IMAGES * 2)
+                init_learning_rate=0.00001, decay_steps=NUM_TRAIN_IMAGES * 2,
+                use_pretrain=True, pretrained_model_dir=FLAGS.pretrained_model_dir,
+                pretrained_scope='InceptionResnetV2')
 
 
 if __name__ == '__main__':
@@ -192,13 +199,18 @@ if __name__ == '__main__':
 
     flags.DEFINE_integer('batch_size', 32, 'The training batch size.')
 
-    flags.DEFINE_integer('num_threads', 2, 'The number of threads to read the tfrecord file.')
+    flags.DEFINE_integer('num_threads', 2,
+                         'The number of threads to read the tfrecord file.')
 
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
+    flags.DEFINE_string('pretrained_model_dir', 'inception_resnet_v2_model/',
+                        'The pickle file which stores the validation set.')
+
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
 
-    flags.DEFINE_string('logdir', '/tmp/log_reg', 'The log dir to log events and checkpoints.')
+    flags.DEFINE_string('logdir', '/tmp/log_reg',
+                        'The log dir to log events and checkpoints.')
 
     app.run()
