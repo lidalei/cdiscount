@@ -19,3 +19,7 @@ inceptionv3/checkpoint.txt
 inception_resnet_v2_model/inception_resnet_v2_2016_08_30.ckpt
 
 inception_resnet_v2_model/inception_resnet_v2.ckpt.data-00000-of-00001
+
+validation_all.tfrecord
+
+validation_minor.pickle
