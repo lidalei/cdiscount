@@ -6,6 +6,266 @@ from constants import make_summary
 from read_data import get_input_data_tensors
 
 
+class LinearClassifier(object):
+    def __init__(self, logdir='/tmp'):
+        """
+        Args:
+             logdir: Path to the log dir.
+        """
+        self.logdir = logdir
+        self.weights = None
+        self.biases = None
+        self.rmse = np.NINF
+
+    def fit(self, data_pipeline, raw_feature_size, tr_data_fn=None, tr_data_paras=None,
+            l2_regs=None, validate_set=None, line_search=True):
+        """
+        Compute weights and biases of linear classifier using normal equation. With line search for best l2_reg.
+        Args:
+            data_pipeline: A namedtuple consisting of the following elements.
+                reader, features reader.
+                data_pattern, File Glob of data set.
+                batch_size, How many examples to handle per time.
+                num_threads, How many IO threads to prefetch examples.
+            raw_feature_size: The dimensionality of features.
+            tr_data_fn: a function that transforms input data.
+            tr_data_paras: Other parameters should be passed to tr_data_fn. A dictionary.
+            l2_regs: An array, each element represents how much the linear classifier weights should be penalized.
+            validate_set: (data, labels) with dtype float32. The data set (numpy arrays) used to choose the best l2_reg.
+                Sampled from whole validate set if necessary. If line_search is False, this argument is simply ignored.
+            line_search: Boolean argument representing whether to do boolean search.
+
+        Returns: Weights and biases fit on the given data set, where biases are appended as the last row.
+
+        """
+        logging.info('Entering linear classifier ...')
+
+        reader = data_pipeline.reader
+        batch_size = data_pipeline.batch_size
+        num_classes = reader.num_classes
+        # Transform raw_feature_size to a list.
+        if isinstance(raw_feature_size, int):
+            raw_feature_size = [raw_feature_size]
+        else:
+            raw_feature_size = list(raw_feature_size)
+        feature_size = raw_feature_size
+
+        logging.info('Linear regression uses {}-dimensional features.'.format(raw_feature_size))
+
+        if line_search:
+            # Both l2_regs and validate_set are required.
+            if l2_regs is None:
+                raise ValueError('There is no l2_regs to do line search.')
+            else:
+                logging.info('l2_regs is {}.'.format(l2_regs))
+
+            if validate_set is None:
+                raise ValueError('There is no validate_set to do line search for l2_reg.')
+            else:
+                validate_data, validate_labels = validate_set
+
+        else:
+            # Simply fit the training set. Make l2_regs have only one element. And ignore validate_set.
+            if l2_regs is None:
+                l2_regs = 0.0001
+            if isinstance(l2_regs, list):
+                l2_regs = l2_regs[0]
+            logging.info('No line search, l2_regs is {}.'.format(l2_regs))
+            if validate_set is None:
+                # Important! To make the graph construction successful.
+                validate_data = np.zeros([1] + raw_feature_size, dtype=np.float32)
+                validate_labels = np.zeros([1, num_classes], dtype=np.float32)
+            else:
+                validate_data, validate_labels = validate_set
+
+        # Check validate data and labels shape.
+        logging.info('validate set: data has shape {}, labels has shape {}.'.format(
+            validate_data.shape, validate_labels.shape))
+
+        if list(validate_data.shape[1:]) != raw_feature_size:
+            raise ValueError('validate set shape does not conforms with training set.')
+
+        # TO BE CAUTIOUS! THE FOLLOWING MAY HAVE TO DEAL WITH FEATURE SIZE CHANGE.
+        # Check extra data transform function arguments.
+        # If transform changes the features size, change it.
+        if tr_data_fn is not None:
+            if tr_data_paras is None:
+                tr_data_paras = {}
+            else:
+                if ('reshape' in tr_data_paras) and (tr_data_paras['reshape'] is True):
+                    feature_size = tr_data_paras['size']
+                    logging.warn('Data transform changes the features size to {}.'.format(feature_size))
+
+        # Method - append an all-one col to X by using block matrix multiplication (all-one col is treated as a block).
+        # Create the graph to traverse all data once.
+        with tf.Graph().as_default() as graph:
+            global_step = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='global_step')
+            global_step_inc_op = tf.assign_add(global_step, 1)
+
+            # X.transpose * X
+            norm_equ_1_initializer = tf.placeholder(tf.float32, shape=[feature_size, feature_size])
+            norm_equ_1 = tf.Variable(initial_value=norm_equ_1_initializer, collections=[], name='X_Tr_X')
+
+            # X.transpose * Y
+            norm_equ_2_initializer = tf.placeholder(tf.float32, shape=[feature_size, num_classes])
+            norm_equ_2 = tf.Variable(initial_value=norm_equ_2_initializer, collections=[], name='X_Tr_Y')
+
+            example_count = tf.Variable(initial_value=0.0, name='example_count')
+            features_sum = tf.Variable(initial_value=tf.zeros([feature_size]), name='features_sum')
+            labels_sum = tf.Variable(initial_value=tf.zeros([num_classes]), name='labels_sum')
+
+            # label is one-hot encoded, int32 type.
+            id_batch, raw_features_batch, labels_batch = (
+                get_input_data_tensors(data_pipeline, onehot_label=True,
+                                       num_epochs=1, name_scope='input'))
+            if tr_data_fn is None:
+                tr_features_batch = tf.identity(raw_features_batch)
+            else:
+                tr_features_batch = tr_data_fn(raw_features_batch, **tr_data_paras)
+
+            with tf.name_scope('batch_increment'):
+                tr_features_batch_tr = tf.matrix_transpose(tr_features_batch, name='X_Tr')
+                float_labels_batch = tf.cast(labels_batch, tf.float32)
+                batch_norm_equ_1 = tf.matmul(tr_features_batch_tr, tr_features_batch,
+                                             name='batch_norm_equ_1')
+                # batch_norm_equ_1 = tf.add_n(tf.map_fn(lambda x: tf.einsum('i,j->ij', x, x),
+                #                                       transformed_features_batch_tr), name='X_Tr_X')
+                batch_norm_equ_2 = tf.matmul(tr_features_batch_tr, float_labels_batch,
+                                             name='batch_norm_equ_2')
+                batch_example_count = tf.cast(tf.shape(tr_features_batch)[0], tf.float32,
+                                              name='batch_example_count')
+                batch_features_sum = tf.reduce_sum(tr_features_batch, axis=0,
+                                                   name='batch_features_sum')
+                batch_labels_sum = tf.reduce_sum(float_labels_batch, axis=0,
+                                                 name='batch_labels_sum')
+
+            with tf.name_scope('update_ops'):
+                update_norm_equ_1_op = tf.assign_add(norm_equ_1, batch_norm_equ_1)
+                update_norm_equ_2_op = tf.assign_add(norm_equ_2, batch_norm_equ_2)
+                update_example_count = tf.assign_add(example_count, batch_example_count)
+                update_features_sum = tf.assign_add(features_sum, batch_features_sum)
+                update_labels_sum = tf.assign_add(labels_sum, batch_labels_sum)
+
+            with tf.control_dependencies([update_norm_equ_1_op, update_norm_equ_2_op,
+                                          update_example_count, update_features_sum,
+                                          update_labels_sum, global_step_inc_op]):
+                update_equ_non_op = tf.no_op(name='unified_update_op')
+
+            with tf.name_scope('solution'):
+                # After all data being handled, compute weights.
+                l2_reg_ph = tf.placeholder(tf.float32, shape=[])
+                l2_reg_term = tf.diag(tf.fill([feature_size], l2_reg_ph), name='l2_reg')
+                # X.transpose * X + lambda * Id, where d is the feature dimension.
+                norm_equ_1_with_reg = tf.add(norm_equ_1, l2_reg_term)
+
+                # Concat other blocks to form the final norm equation terms.
+                final_norm_equ_1_top = tf.concat([norm_equ_1_with_reg, tf.expand_dims(features_sum, 1)], 1)
+                final_norm_equ_1_bot = tf.concat([features_sum, tf.expand_dims(example_count, 0)], 0)
+                final_norm_equ_1 = tf.concat([final_norm_equ_1_top, tf.expand_dims(final_norm_equ_1_bot, 0)], 0,
+                                             name='norm_equ_1')
+                final_norm_equ_2 = tf.concat([norm_equ_2, tf.expand_dims(labels_sum, 0)], 0,
+                                             name='norm_equ_2')
+
+                # The last row is the biases.
+                weights_biases = tf.matrix_solve(final_norm_equ_1, final_norm_equ_2, name='weights_biases')
+
+                weights = weights_biases[:-1]
+                biases = weights_biases[-1]
+
+            with tf.name_scope('loss'):
+                predictions = tf.matmul(tr_features_batch, weights) + biases
+                loss = tf.sqrt(tf.reduce_mean(
+                    tf.squared_difference(predictions, float_labels_batch)), name='rmse')
+                # pred_labels = tf.greater_equal(predictions, 0.0, name='pred_labels')
+
+            summary_op = tf.summary.merge_all()
+
+            init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
+                               name='init_glo_loc_var')
+
+        sess = tf.Session(graph=graph)
+        # Initialize variables.
+        sess.run(init_op)
+        sess.run([norm_equ_1.initializer, norm_equ_2.initializer], feed_dict={
+            norm_equ_1_initializer: np.zeros([feature_size, feature_size], dtype=np.float32),
+            norm_equ_2_initializer: np.zeros([feature_size, num_classes], dtype=np.float32)
+        })
+
+        # If logdir does not exist, it will be created automatically.
+        summary_writer = tf.summary.FileWriter(self.logdir, graph=sess.graph)
+
+        # Start input enqueue threads.
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+        try:
+            while not coord.should_stop():
+                _, summary, global_step_val = sess.run([update_equ_non_op, summary_op, global_step])
+                summary_writer.add_summary(summary, global_step=global_step_val)
+        except tf.errors.OutOfRangeError:
+            logging.info('Finished normal equation terms computation -- one epoch done.')
+        finally:
+            # When done, ask the threads to stop.
+            coord.request_stop()
+            summary_writer.close()
+
+        # Wait for threads to finish.
+        coord.join(threads)
+
+        if line_search:
+            # Do true search.
+            best_weights_val, best_biases_val = None, None
+            best_l2_reg = 0
+            min_loss = np.PINF
+
+            for l2_reg in l2_regs:
+                # Compute regularized weights.
+                weights_val, biases_val = sess.run([weights, biases], feed_dict={l2_reg_ph: l2_reg})
+                # Compute validation loss.
+                num_validate_videos = validate_data.shape[0]
+                split_indices = np.linspace(0, num_validate_videos,
+                                            num=max(num_validate_videos // batch_size, 2), dtype=np.int32)
+                loss_vals = []
+                for i in range(len(split_indices) - 1):
+                    start_ind = split_indices[i]
+                    end_ind = split_indices[i + 1]
+
+                    par_val_data = validate_data[start_ind:end_ind]
+                    # One-hot encoded labels.
+                    par_val_labels = np.eye(num_classes)[validate_labels[start_ind:end_ind]]
+
+                    # Avoid re-computing weights and biases (Otherwise, l2_reg_ph is necessary).
+                    ith_loss_val = sess.run(loss, feed_dict={raw_features_batch: par_val_data,
+                                                             float_labels_batch: par_val_labels,
+                                                             weights: weights_val,
+                                                             biases: biases_val})
+
+                    loss_vals.append(ith_loss_val * (end_ind - start_ind))
+
+                validate_loss_val = sum(loss_vals) / num_validate_videos
+
+                logging.info('l2_reg {} leads to rmse loss {}.'.format(l2_reg, validate_loss_val))
+                if validate_loss_val < min_loss:
+                    best_weights_val, best_biases_val = weights_val, biases_val
+                    min_loss = validate_loss_val
+                    best_l2_reg = l2_reg
+
+        else:
+            # Extract weights and biases of num_classes linear classifiers. Each column corresponds to a classifier.
+            best_weights_val, best_biases_val, loss_val = sess.run(
+                [weights, biases, loss], feed_dict={l2_reg_ph: l2_regs})
+            best_l2_reg, min_loss = l2_regs, None if not validate_set else loss_val
+
+        sess.close()
+
+        logging.info('The best l2_reg is {} with rmse loss {}.'.format(best_l2_reg, min_loss))
+        logging.info('Exiting linear classifier ...')
+
+        self.weights = best_weights_val
+        self.biases = best_biases_val
+        self.rmse = min_loss
+
+
 class LogisticRegression(object):
     def __init__(self, logdir='/tmp/log_reg', max_train_steps=1000000):
         """
@@ -23,13 +283,15 @@ class LogisticRegression(object):
         self.batch_size = None
         self.tr_data_fn = None
         self.tr_data_paras = dict()
-        self.init_learning_rate = 0.001
-        self.decay_steps = 40000
-        self.decay_rate = 0.95
+        self.init_learning_rate = None
+        self.decay_steps = None
+        self.decay_rate = None
         self.epochs = None
         self.l1_reg_rate = None
         self.l2_reg_rate = None
         self.pos_weights = None
+        self.initial_weights = None
+        self.initial_biases = None
 
         # Whether to use a pretrained model
         self.use_pretrain = False
@@ -74,15 +336,20 @@ class LogisticRegression(object):
                                    name_scope='input'))
 
         # Define num_classes logistic regression models parameters.
-        weights = tf.Variable(initial_value=tf.truncated_normal(
-            [self.feature_size, self.num_classes], stddev=1.0 / np.sqrt(self.feature_size)),
-            dtype=tf.float32, name='weights')
-
+        if self.initial_weights is None:
+            weights = tf.Variable(initial_value=tf.truncated_normal(
+                [self.feature_size, self.num_classes], stddev=1.0 / np.sqrt(self.feature_size)),
+                dtype=tf.float32, name='weights')
+        else:
+            weights = tf.Variable(initial_value=self.initial_weights, dtype=tf.float32, name='weights')
         # tf.GraphKeys.REGULARIZATION_LOSSES contains all variables to regularize.
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weights)
         tf.summary.histogram('model/weights', weights)
 
-        biases = tf.Variable(initial_value=tf.zeros([self.num_classes]), name='biases')
+        if self.initial_biases is None:
+            biases = tf.Variable(initial_value=tf.zeros([self.num_classes]), name='biases')
+        else:
+            biases = tf.Variable(initial_value=self.initial_biases, name='biases')
 
         tf.summary.histogram('model/biases', biases)
 
@@ -220,6 +487,7 @@ class LogisticRegression(object):
             tr_data_fn=None, tr_data_paras=None, validation_set=None, validation_fn=None,
             init_learning_rate=0.0001, decay_steps=40000, decay_rate=0.95, epochs=None,
             l1_reg_rate=None, l2_reg_rate=None, pos_weights=None,
+            initial_weights=None, initial_biases=None,
             use_pretrain=False, pretrained_model_dir=None, pretrained_scope=None):
         """
         Logistic regression fit function.
@@ -239,6 +507,8 @@ class LogisticRegression(object):
             l2_reg_rate: l2 regularization rate.
             pos_weights: For imbalanced binary classes. Here, num_pos << num_neg, the weights should be > 1.0.
                 If None, treated as 1.0 for all binary classifiers.
+            initial_weights: If not None, the weights will be initialized with it.
+            initial_biases: If not None, the biases will be initialized with it.
             use_pretrain: Whether to use pretrained model.
             pretrained_model_dir: The folder that contains the pretrained model.
             pretrained_scope: The scope to hold the pretrained model.
@@ -262,6 +532,9 @@ class LogisticRegression(object):
         self.l1_reg_rate = l1_reg_rate
         self.l2_reg_rate = l2_reg_rate
         self.pos_weights = pos_weights
+        self.initial_weights = initial_weights
+        self.initial_biases = initial_biases
+
         self.use_pretrain = use_pretrain
         self.pretrained_model_dir = pretrained_model_dir
         self.pretrained_scope = pretrained_scope
@@ -364,7 +637,7 @@ class LogisticRegression(object):
 
                         # Compute validation loss.
                         num_val_images = len(val_labels)
-                        split_indices = np.linspace(0, num_val_images, max(num_val_images // batch_size, 2),
+                        split_indices = np.linspace(0, num_val_images, num=max(num_val_images // batch_size, 2),
                                                     dtype=np.int32)
 
                         val_loss_vals, val_pred_labels = [], []
