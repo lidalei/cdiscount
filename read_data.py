@@ -143,8 +143,8 @@ class DataTFReader(object):
 
         if onehot_label:
             one_hot_labels = tf.one_hot(labels, depth=self.num_classes,
-                                        on_value=1.0, off_value=0.0,
-                                        dtype=tf.float32, axis=-1)
+                                        on_value=1, off_value=0,
+                                        dtype=tf.int32, axis=-1)
 
             return img_ids, imgs, one_hot_labels
         else:
