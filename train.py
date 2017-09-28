@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow import flags, logging, app
 from tensorflow.contrib import slim
 from pickle import load as pickle_load
+from os.path import join as path_join
 
 from read_data import DataTFReader
 from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline
@@ -10,7 +11,7 @@ from constants import ConvFilterShape, compute_accuracy
 from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
-from linear_model import LogisticRegression
+from linear_model import LogisticRegression, LinearClassifier
 
 import inception_resnet_v2 as inception
 
@@ -174,11 +175,32 @@ def main(unused_argv):
                                        batch_size=FLAGS.batch_size,
                                        num_threads=FLAGS.num_threads)
 
-    # Change Me!
-    tr_data_fn = transfer_learn_inception_resnet_v2
-    # If output_stride is 16, 1536, Conv2d_7b_1x1
-    # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    if FLAGS.start_new_model:
+        # Change Me!
+        tr_data_fn = transfer_learn_inception_resnet_v2
+        # If output_stride is 16, 1536, Conv2d_7b_1x1
+        # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
+        tr_data_paras = {'reshape': True, 'size': 1536}
+
+        # ...Start linear classifier...
+        # Compute weights and biases of linear classifier using normal equation.
+        # Linear search helps little.
+        linear_clf = LinearClassifier(logdir=path_join(FLAGS.logdir, 'linear_classifier'))
+        linear_clf.fit(train_data_pipeline, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
+                       tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
+                       l2_regs=np.logspace(-5, 5, num=10),
+                       validate_set=(val_data, val_labels), line_search=True)
+        linear_clf_weights, linear_clf_biases = linear_clf.weights, linear_clf.biases
+
+        logging.info('linear classifier weights and biases with shape {}, {}'.format(
+            linear_clf_weights.shape, linear_clf_biases.shape))
+        logging.debug('linear classifier weights and {} biases: {}.'.format(
+            linear_clf_weights, linear_clf_biases))
+        # ...Exit linear classifier...
+    else:
+        linear_clf_weights, linear_clf_biases = None, None
+        tr_data_fn = None
+        tr_data_paras = None
 
     log_reg = LogisticRegression(logdir=FLAGS.logdir)
     log_reg.fit(train_data_pipeline,
@@ -186,7 +208,8 @@ def main(unused_argv):
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
-                init_learning_rate=0.00001, decay_steps=NUM_TRAIN_IMAGES * 2,
+                init_learning_rate=0.001, decay_steps=NUM_TRAIN_IMAGES * 2,
+                initial_weights=linear_clf_weights, initial_biases=linear_clf_biases,
                 use_pretrain=True, pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope='InceptionResnetV2')
 
