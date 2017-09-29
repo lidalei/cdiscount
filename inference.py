@@ -62,6 +62,7 @@ class BootstrapInference(object):
                 # Get collections to be used in making predictions for test data.
                 img_input_batch = tf.get_collection('raw_features_batch')[0]
                 pred_prob = tf.get_collection('pred_prob')[0]
+                # phase_train_pl collection might be empty.
                 phase_train_pl = tf.get_collection('phase_train_pl')
 
                 # Append session and input and predictions.
@@ -120,7 +121,7 @@ class BootstrapInference(object):
                         # logging.info('Feature shape is {}.'.format(feature_shape))
 
                         batch_pred_prob = sess.run(pred_prob, feed_dict=dict(
-                            {img_input_batch: img_batch_val}, **phase_train_pl
+                            {img_input_batch: img_batch_val, **phase_train_pl}
                         ))
                         batch_pred_prob_list.append(batch_pred_prob)
 
