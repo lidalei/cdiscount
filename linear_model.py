@@ -229,7 +229,7 @@ class LinearClassifier(object):
             weights_val, biases_val = sess.run([weights, biases], feed_dict={l2_reg_ph: l2_reg})
             # Compute validation loss.
             num_validate_videos = validate_data.shape[0]
-            split_indices = np.linspace(0, num_validate_videos,
+            split_indices = np.linspace(0, num_validate_videos + 1,
                                         num=max(num_validate_videos // batch_size, 2), dtype=np.int32)
             loss_vals = []
             for i in range(len(split_indices) - 1):
@@ -243,7 +243,6 @@ class LinearClassifier(object):
                 # Avoid re-computing weights and biases (Otherwise, l2_reg_ph is necessary).
                 ith_loss_val = sess.run(loss,
                                         feed_dict={
-                                            **val_feed_dict,
                                             raw_features_batch: par_val_data,
                                             float_labels_batch: par_val_labels,
                                             weights: weights_val,
@@ -372,6 +371,7 @@ class LogisticRegression(object):
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
 
         with tf.name_scope('train'):
+            # TODO, multi-label uses sigmoid_cross_entropy_with_logits
             loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=labels_batch, logits=logits, name='x_entropy_per_example')
 
@@ -484,7 +484,8 @@ class LogisticRegression(object):
             self.pretrained_saver = tf.train.Saver(
                 var_list=self.graph.get_collection(
                     tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
-                    tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope))
+                    tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope),
+                name='pretrained_saver')
 
             return lambda s: self.pretrained_saver.restore(s, self.pretrained_checkpoint)
         else:
@@ -637,7 +638,7 @@ class LogisticRegression(object):
 
                             # Compute validation loss.
                             num_val_images = len(val_labels)
-                            split_indices = np.linspace(0, num_val_images,
+                            split_indices = np.linspace(0, num_val_images + 1,
                                                         num=max(num_val_images // batch_size, 2),
                                                         dtype=np.int32)
 
