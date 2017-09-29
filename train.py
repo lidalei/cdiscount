@@ -205,7 +205,7 @@ def main(unused_argv):
         tr_data_fn = None
         tr_data_paras = None
 
-    log_reg = LogisticRegression(logdir=FLAGS.logdir)
+    log_reg = LogisticRegression(logdir=path_join(FLAGS.logdir, 'log_reg'))
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                 start_new_model=FLAGS.start_new_model,
@@ -236,7 +236,7 @@ if __name__ == '__main__':
 
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
 
-    flags.DEFINE_string('logdir', '/tmp/log_reg',
+    flags.DEFINE_string('logdir', '/tmp/inception_resnet_v2',
                         'The log dir to log events and checkpoints.')
 
     app.run()
