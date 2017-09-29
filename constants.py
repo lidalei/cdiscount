@@ -13,6 +13,7 @@ DATA_SET_FOLDER = '/Users/Sophie/Documents/cdiscount/'
 CATEGORY_NAMES_FILE_NAME = path_join(DATA_SET_FOLDER, 'category_names.csv')
 BSON_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train_example.bson')
 TRAIN_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train.tfrecord')
+TRAIN_VAL_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train_val.tfrecord')
 VALIDATION_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'validation_all.tfrecord')
 TEST_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'test.tfrecord')
 

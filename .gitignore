@@ -23,3 +23,5 @@ inception_resnet_v2_model/inception_resnet_v2.ckpt.data-00000-of-00001
 validation_all.tfrecord
 
 validation_minor.pickle
+
+train_val.tfrecord

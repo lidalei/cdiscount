@@ -173,11 +173,6 @@ def main(unused_argv):
     with open(FLAGS.validation_data_file, 'rb') as pickle_f:
         val_data, val_labels = pickle_load(pickle_f)
 
-    train_data_pipeline = DataPipeline(reader=reader,
-                                       data_pattern=FLAGS.train_data_pattern,
-                                       batch_size=FLAGS.batch_size,
-                                       num_threads=FLAGS.num_threads)
-
     if FLAGS.start_new_model:
         # Change Me!
         tr_data_fn = transfer_learn_inception_resnet_v2
@@ -188,6 +183,11 @@ def main(unused_argv):
         # ...Start linear classifier...
         # Compute weights and biases of linear classifier using normal equation.
         # Linear search helps little.
+        train_data_pipeline = DataPipeline(reader=reader,
+                                           data_pattern=FLAGS.train_val_data_file,
+                                           batch_size=FLAGS.batch_size,
+                                           num_threads=FLAGS.num_threads)
+
         linear_clf = LinearClassifier(logdir=path_join(FLAGS.logdir, 'linear_classifier'))
         linear_clf.fit(train_data_pipeline, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                        tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
@@ -205,13 +205,18 @@ def main(unused_argv):
         tr_data_fn = None
         tr_data_paras = None
 
+    train_data_pipeline = DataPipeline(reader=reader,
+                                       data_pattern=FLAGS.train_data_pattern,
+                                       batch_size=FLAGS.batch_size,
+                                       num_threads=FLAGS.num_threads)
+
     log_reg = LogisticRegression(logdir=path_join(FLAGS.logdir, 'log_reg'))
     log_reg.fit(train_data_pipeline,
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
-                init_learning_rate=0.001, decay_steps=NUM_TRAIN_IMAGES * 2,
+                init_learning_rate=0.00001, decay_steps=NUM_TRAIN_IMAGES * 2,
                 initial_weights=linear_clf_weights, initial_biases=linear_clf_biases,
                 use_pretrain=True, pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope='InceptionResnetV2')
@@ -222,6 +227,9 @@ if __name__ == '__main__':
 
     flags.DEFINE_string('train_data_pattern', TRAIN_TF_DATA_FILE_NAME,
                         'The Glob pattern to training data tfrecord files.')
+
+    flags.DEFINE_string('train_val_data_file', TRAIN_VAL_TF_DATA_FILE_NAME,
+                        'The Glob pattern to fit the linear regression model.')
 
     flags.DEFINE_integer('batch_size', 64, 'The training batch size.')
 

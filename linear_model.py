@@ -204,8 +204,11 @@ class LinearClassifier(object):
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
+        step = 0
         try:
             while not coord.should_stop():
+                step += 1
+                print('Step: {}'.format(step))
                 _, summary, global_step_val = sess.run([update_equ_non_op, summary_op, global_step],
                                                        feed_dict=val_feed_dict)
                 summary_writer.add_summary(summary, global_step=global_step_val)
