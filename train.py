@@ -151,10 +151,13 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
     with slim.arg_scope(arg_scope):
         # Do not forget to cast images to float type.
         input_val = tf.cast(inputs, tf.float32)
-        # num_classes is not used here, keep it small.
+        # dropout and batch normalization need to know the phase, training or validation (test).
+        # Used for dropout and batch normalization. By default True.
+        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+        tf.add_to_collection('phase_train_pl', phase_train_pl)
         # If output_stride is 8, create_aux_logits. If 16, not create_aux_logits.
         _, end_points = inception.inception_resnet_v2(
-            input_val, is_training=True, create_aux_logits=False)
+            input_val, is_training=phase_train_pl, create_aux_logits=False)
         tr_features = end_points['PreLogitsFlatten']
 
         return tr_features
@@ -188,7 +191,7 @@ def main(unused_argv):
         linear_clf = LinearClassifier(logdir=path_join(FLAGS.logdir, 'linear_classifier'))
         linear_clf.fit(train_data_pipeline, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                        tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
-                       l2_regs=np.logspace(-5, 5, num=10),
+                       l2_regs=np.logspace(-5, 5, num=2),
                        validate_set=(val_data, val_labels), line_search=True)
         linear_clf_weights, linear_clf_biases = linear_clf.weights, linear_clf.biases
 
@@ -220,7 +223,7 @@ if __name__ == '__main__':
     flags.DEFINE_string('train_data_pattern', TRAIN_TF_DATA_FILE_NAME,
                         'The Glob pattern to training data tfrecord files.')
 
-    flags.DEFINE_integer('batch_size', 32, 'The training batch size.')
+    flags.DEFINE_integer('batch_size', 64, 'The training batch size.')
 
     flags.DEFINE_integer('num_threads', 2,
                          'The number of threads to read the tfrecord file.')

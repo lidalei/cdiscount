@@ -67,9 +67,11 @@ class LinearClassifier(object):
         else:
             # Simply fit the training set. Make l2_regs have only one element. And ignore validate_set.
             if l2_regs is None:
-                l2_regs = 0.0001
-            if isinstance(l2_regs, list):
-                l2_regs = l2_regs[0]
+                l2_regs = [0.0001]
+            elif isinstance(l2_regs, float):
+                l2_regs = [l2_regs]
+            elif isinstance(l2_regs, list) or isinstance(l2_regs, tuple):
+                l2_regs = l2_regs[:1]
             logging.info('No line search, l2_regs is {}.'.format(l2_regs))
             if validate_set is None:
                 # Important! To make the graph construction successful.
@@ -183,6 +185,10 @@ class LinearClassifier(object):
             init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
                                name='init_glo_loc_var')
 
+            phase_train_pls = tf.get_collection('phase_train_pl')
+            phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
+            val_feed_dict = {phase_train_pl: False} if phase_train_pl is not None else {}
+
         sess = tf.Session(graph=graph)
         # Initialize variables.
         sess.run(init_op)
@@ -200,7 +206,8 @@ class LinearClassifier(object):
 
         try:
             while not coord.should_stop():
-                _, summary, global_step_val = sess.run([update_equ_non_op, summary_op, global_step])
+                _, summary, global_step_val = sess.run([update_equ_non_op, summary_op, global_step],
+                                                       feed_dict=val_feed_dict)
                 summary_writer.add_summary(summary, global_step=global_step_val)
         except tf.errors.OutOfRangeError:
             logging.info('Finished normal equation terms computation -- one epoch done.')
@@ -212,49 +219,48 @@ class LinearClassifier(object):
         # Wait for threads to finish.
         coord.join(threads)
 
-        if line_search:
-            # Do true search.
-            best_weights_val, best_biases_val = None, None
-            best_l2_reg = 0
-            min_loss = np.PINF
+        # Line search.
+        best_weights_val, best_biases_val = None, None
+        best_l2_reg = 0
+        min_loss = np.PINF
 
-            for l2_reg in l2_regs:
-                # Compute regularized weights.
-                weights_val, biases_val = sess.run([weights, biases], feed_dict={l2_reg_ph: l2_reg})
-                # Compute validation loss.
-                num_validate_videos = validate_data.shape[0]
-                split_indices = np.linspace(0, num_validate_videos,
-                                            num=max(num_validate_videos // batch_size, 2), dtype=np.int32)
-                loss_vals = []
-                for i in range(len(split_indices) - 1):
-                    start_ind = split_indices[i]
-                    end_ind = split_indices[i + 1]
+        for l2_reg in l2_regs:
+            # Compute regularized weights.
+            weights_val, biases_val = sess.run([weights, biases], feed_dict={l2_reg_ph: l2_reg})
+            # Compute validation loss.
+            num_validate_videos = validate_data.shape[0]
+            split_indices = np.linspace(0, num_validate_videos,
+                                        num=max(num_validate_videos // batch_size, 2), dtype=np.int32)
+            loss_vals = []
+            for i in range(len(split_indices) - 1):
+                start_ind = split_indices[i]
+                end_ind = split_indices[i + 1]
 
-                    par_val_data = validate_data[start_ind:end_ind]
-                    # One-hot encoded labels.
-                    par_val_labels = np.eye(num_classes)[validate_labels[start_ind:end_ind]]
+                par_val_data = validate_data[start_ind:end_ind]
+                # One-hot encoded labels.
+                par_val_labels = np.eye(num_classes)[validate_labels[start_ind:end_ind]]
 
-                    # Avoid re-computing weights and biases (Otherwise, l2_reg_ph is necessary).
-                    ith_loss_val = sess.run(loss, feed_dict={raw_features_batch: par_val_data,
-                                                             float_labels_batch: par_val_labels,
-                                                             weights: weights_val,
-                                                             biases: biases_val})
+                # Avoid re-computing weights and biases (Otherwise, l2_reg_ph is necessary).
+                ith_loss_val = sess.run(loss,
+                                        feed_dict={
+                                            **val_feed_dict,
+                                            raw_features_batch: par_val_data,
+                                            float_labels_batch: par_val_labels,
+                                            weights: weights_val,
+                                            biases: biases_val})
 
-                    loss_vals.append(ith_loss_val * (end_ind - start_ind))
+                loss_vals.append(ith_loss_val * (end_ind - start_ind))
 
-                validate_loss_val = sum(loss_vals) / num_validate_videos
+            validate_loss_val = sum(loss_vals) / num_validate_videos
 
-                logging.info('l2_reg {} leads to rmse loss {}.'.format(l2_reg, validate_loss_val))
-                if validate_loss_val < min_loss:
-                    best_weights_val, best_biases_val = weights_val, biases_val
-                    min_loss = validate_loss_val
-                    best_l2_reg = l2_reg
+            logging.info('l2_reg {} leads to rmse loss {}.'.format(l2_reg, validate_loss_val))
+            if validate_loss_val < min_loss:
+                best_weights_val, best_biases_val = weights_val, biases_val
+                min_loss = validate_loss_val
+                best_l2_reg = l2_reg
 
-        else:
-            # Extract weights and biases of num_classes linear classifiers. Each column corresponds to a classifier.
-            best_weights_val, best_biases_val, loss_val = sess.run(
-                [weights, biases, loss], feed_dict={l2_reg_ph: l2_regs})
-            best_l2_reg, min_loss = l2_regs, None if not validate_set else loss_val
+        if (not line_search) and (validate_set is None):
+            min_loss = None
 
         sess.close()
 
@@ -312,6 +318,7 @@ class LogisticRegression(object):
         self.loss = None
         self.pred_prob = None
         self.pred_labels = None
+        self.phase_train_pl = None
 
     def _build_graph(self):
         """
@@ -594,6 +601,12 @@ class LogisticRegression(object):
             self.pred_prob = tf.get_collection('pred_prob')[0]
             self.pred_labels = tf.get_collection('pred_labels')[0]
 
+            phase_train_pls = tf.get_collection('phase_train_pl')
+            self.phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
+
+            train_feed_dict = {self.phase_train_pl: True} if self.phase_train_pl is not None else {}
+            val_feed_dict = {self.phase_train_pl: False} if self.phase_train_pl is not None else {}
+
         if self._check_graph_initialized():
             logging.info('Succeeded to initialize logistic regression Graph.')
         else:
@@ -612,75 +625,60 @@ class LogisticRegression(object):
                 if sv.should_stop():
                     break
                 if step % 500 == 0:
-                    if validation_fn is not None:
-                        val_func_name = validation_fn.__name__
-
-                        _, summary, train_pred_labels_batch, train_labels_batch, global_step_val = sess.run(
-                            [self.train_op, self.summary_op, self.pred_labels, self.labels_batch, self.global_step])
-
-                        # Evaluate on train data.
-                        train_per = validation_fn(predictions=train_pred_labels_batch, labels=train_labels_batch)
-                        sv.summary_writer.add_summary(
-                            make_summary('train/{}'.format(val_func_name), train_per),
-                            global_step_val)
-                        print('Step {}, train {}: {}.'.format(global_step_val, val_func_name, train_per))
-                    else:
-                        _, summary, global_step_val = sess.run(
-                            [self.train_op, self.summary_op, self.global_step])
-
+                    _, summary, global_step_val = sess.run(
+                        [self.train_op, self.summary_op, self.global_step], feed_dict=train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
 
-                    # Compute validation loss and performance (validation_fn).
-                    if validation_set is not None:
-                        val_data, val_labels = validation_set
+                    if step % 1000 == 0:
+                        # Compute validation loss and performance (validation_fn).
+                        if validation_set is not None:
+                            val_data, val_labels = validation_set
 
-                        # Compute validation loss.
-                        num_val_images = len(val_labels)
-                        split_indices = np.linspace(0, num_val_images, num=max(num_val_images // batch_size, 2),
-                                                    dtype=np.int32)
+                            # Compute validation loss.
+                            num_val_images = len(val_labels)
+                            split_indices = np.linspace(0, num_val_images,
+                                                        num=max(num_val_images // batch_size, 2),
+                                                        dtype=np.int32)
 
-                        val_loss_vals, val_pred_labels = [], []
-                        for i in range(len(split_indices) - 1):
-                            start_ind = split_indices[i]
-                            end_ind = split_indices[i + 1]
+                            val_loss_vals, val_pred_labels = [], []
+                            for i in range(len(split_indices) - 1):
+                                start_ind = split_indices[i]
+                                end_ind = split_indices[i + 1]
+
+                                if validation_fn is not None:
+                                    ith_val_loss_val, ith_pred_labels = sess.run(
+                                        [self.loss, self.pred_labels], feed_dict={
+                                            **val_feed_dict,
+                                            self.raw_features_batch: val_data[start_ind:end_ind],
+                                            self.labels_batch: val_labels[start_ind:end_ind]})
+
+                                    val_pred_labels.append(ith_pred_labels)
+                                else:
+                                    ith_val_loss_val = sess.run(
+                                        self.loss, feed_dict={
+                                            **val_feed_dict,
+                                            self.raw_features_batch: val_data[start_ind:end_ind],
+                                            self.labels_batch: val_labels[start_ind:end_ind]})
+
+                                val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
+
+                            val_loss_val = sum(val_loss_vals) / num_val_images
+                            # Add validation summary.
+                            sv.summary_writer.add_summary(
+                                make_summary('validation/xentropy', val_loss_val), global_step_val)
 
                             if validation_fn is not None:
-                                ith_val_loss_val, ith_pred_labels = sess.run(
-                                    [self.loss, self.pred_labels], feed_dict={
-                                        self.raw_features_batch: val_data[start_ind:end_ind],
-                                        self.labels_batch: val_labels[start_ind:end_ind]})
+                                val_func_name = validation_fn.__name__
+                                val_per = validation_fn(predictions=np.concatenate(val_pred_labels, axis=0),
+                                                        labels=val_labels)
 
-                                val_pred_labels.append(ith_pred_labels)
-                            else:
-                                ith_val_loss_val = sess.run(
-                                    self.loss, feed_dict={
-                                        self.raw_features_batch: val_data[start_ind:end_ind],
-                                        self.labels_batch: val_labels[start_ind:end_ind]})
-
-                            val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
-
-                        val_loss_val = sum(val_loss_vals) / num_val_images
-                        # Add validation summary.
-                        sv.summary_writer.add_summary(
-                            make_summary('validation/xentropy', val_loss_val), global_step_val)
-
-                        if validation_fn is not None:
-                            val_func_name = validation_fn.__name__
-                            val_per = validation_fn(predictions=np.concatenate(val_pred_labels, axis=0),
-                                                    labels=val_labels)
-
-                            sv.summary_writer.add_summary(
-                                make_summary('validation/{}'.format(val_func_name), val_per),
-                                global_step_val)
-                            print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
-
-                elif step % 200 == 0:
-                    _, summary, global_step_val = sess.run(
-                        [self.train_op, self.summary_op, self.global_step])
-                    sv.summary_computed(sess, summary, global_step=global_step_val)
+                                sv.summary_writer.add_summary(
+                                    make_summary('validation/{}'.format(val_func_name), val_per),
+                                    global_step_val)
+                                print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
                 else:
-                    sess.run(self.train_op)
+                    sess.run(self.train_op, feed_dict=train_feed_dict)
 
         logging.info("Exited training loop.")
 
