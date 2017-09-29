@@ -9,6 +9,7 @@ from read_data import DataTFReader
 from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline
 from constants import ConvFilterShape, compute_accuracy
 from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
+from constants import TRAIN_VAL_TF_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
 from linear_model import LogisticRegression, LinearClassifier
