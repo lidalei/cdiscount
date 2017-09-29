@@ -191,7 +191,7 @@ def main(unused_argv):
         linear_clf = LinearClassifier(logdir=path_join(FLAGS.logdir, 'linear_classifier'))
         linear_clf.fit(train_data_pipeline, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                        tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
-                       l2_regs=np.logspace(-5, 5, num=2),
+                       l2_regs=np.logspace(-5, 5, num=10),
                        validate_set=(val_data, val_labels), line_search=True)
         linear_clf_weights, linear_clf_biases = linear_clf.weights, linear_clf.biases
 
