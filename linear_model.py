@@ -307,6 +307,7 @@ class LogisticRegression(object):
         self.pretrained_saver = None
         self.pretrained_model_dir = None
         self.pretrained_scope = None
+        self.pretrained_var_list = None
 
         self.graph = None
         # Member variables associated with graph.
@@ -367,6 +368,12 @@ class LogisticRegression(object):
             tr_features_batch = tf.identity(raw_features_batch)
         else:
             tr_features_batch = self.tr_data_fn(raw_features_batch, **self.tr_data_paras)
+            # Get the pretrained variables just after creating the transformation!!!
+            # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
+            # This will cause an error while restoring the variables.
+            self.pretrained_var_list = self.graph.get_collection(
+                tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
+                tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
 
         logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
 
@@ -496,11 +503,8 @@ class LogisticRegression(object):
             # Load pre-trained graph.
             self.pretrained_checkpoint = tf.train.latest_checkpoint(self.pretrained_model_dir)
             logging.info("Pretrained checkpoint: {}".format(self.pretrained_checkpoint))
-            self.pretrained_saver = tf.train.Saver(
-                var_list=self.graph.get_collection(
-                    tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
-                    tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope),
-                name='pretrained_saver')
+            self.pretrained_saver = tf.train.Saver(var_list=self.pretrained_var_list,
+                                                   name='pretrained_saver')
 
             return lambda s: self.pretrained_saver.restore(s, self.pretrained_checkpoint)
         else:
