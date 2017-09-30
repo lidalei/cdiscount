@@ -649,12 +649,15 @@ class LogisticRegression(object):
                 # Train the softmax layer for 50000 steps and then train the full network (incl. transformation).
                 if step <= 50000:
                     current_train_op = self.train_op_w
+                    # Don't use dropout nor update batch normalization.
+                    current_train_feed_dict = val_feed_dict
                 else:
                     current_train_op = self.train_op
+                    current_train_feed_dict = train_feed_dict
 
                 if step % 500 == 0:
                     _, summary, global_step_val = sess.run(
-                        [current_train_op, self.summary_op, self.global_step], feed_dict=train_feed_dict)
+                        [current_train_op, self.summary_op, self.global_step], feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
 
@@ -706,7 +709,7 @@ class LogisticRegression(object):
                                     global_step_val)
                                 print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
                 else:
-                    sess.run(current_train_op, feed_dict=train_feed_dict)
+                    sess.run(current_train_op, feed_dict=current_train_feed_dict)
 
         logging.info("Exited training loop.")
 
