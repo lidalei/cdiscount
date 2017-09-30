@@ -313,6 +313,7 @@ class LogisticRegression(object):
         self.saver = None
         self.global_step = None
         self.init_op = None
+        self.train_op_w = None
         self.train_op = None
         self.summary_op = None
         self.raw_features_batch = None
@@ -356,7 +357,7 @@ class LogisticRegression(object):
         tf.summary.histogram('model/weights', weights)
 
         if self.initial_biases is None:
-            biases = tf.Variable(initial_value=tf.zeros([self.num_classes]), name='biases')
+            biases = tf.Variable(initial_value=tf.fill([self.num_classes], 0.1), name='biases')
         else:
             biases = tf.Variable(initial_value=self.initial_biases, name='biases')
 
@@ -406,18 +407,28 @@ class LogisticRegression(object):
             final_loss = tf.add(loss, reg_loss, name='final_loss')
 
         with tf.name_scope('optimization'):
+            # Optimize the softmax layer first and then
+            # optimize both softmax and transformation layer simultaneously.
+
             # Decayed learning rate.
             rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate, rough_num_examples_processed,
-                                                            self.decay_steps, self.decay_rate, staircase=True,
-                                                            name='adap_learning_rate')
-            tf.summary.scalar('learning_rate', adap_learning_rate)
+            adap_learning_rate_w = tf.train.exponential_decay(self.init_learning_rate,
+                                                              rough_num_examples_processed,
+                                                              self.decay_steps,
+                                                              self.decay_rate,
+                                                              staircase=True,
+                                                              name='adap_learning_rate')
+            tf.summary.scalar('learning_rate_w', adap_learning_rate_w)
             # GradientDescentOptimizer
-            optimizer = tf.train.GradientDescentOptimizer(adap_learning_rate)
+            optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
             # MomentumOptimizer
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
-            # RMSPropOptimizer
-            # optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
+            train_op_w = optimizer_w.minimize(final_loss,
+                                              global_step=global_step,
+                                              var_list=[weights, biases])
+
+            # Fine tuning the transformation and softmax layer with RMSPropOptimizer
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate / 10.0)
             train_op = optimizer.minimize(final_loss, global_step=global_step)
 
         summary_op = tf.summary.merge_all()
@@ -429,6 +440,7 @@ class LogisticRegression(object):
         # Used for restoring training checkpoints.
         tf.add_to_collection('global_step', global_step)
         tf.add_to_collection('init_op', init_op)
+        tf.add_to_collection('train_op_w', train_op_w)
         tf.add_to_collection('train_op', train_op)
         tf.add_to_collection('summary_op', summary_op)
         # Add to collection. In inference, get collection and feed it with test data.
@@ -472,7 +484,7 @@ class LogisticRegression(object):
             Return:
                 True if graph and all graph ops are not None, otherwise False.
             """
-            graph_ops = [self.saver, self.global_step, self.init_op, self.train_op,
+            graph_ops = [self.saver, self.global_step, self.init_op, self.train_op, self.train_op_w,
                          self.summary_op, self.raw_features_batch, self.labels_batch, self.loss,
                          self.pred_prob, self.pred_labels]
 
@@ -597,6 +609,7 @@ class LogisticRegression(object):
             # Get collections to be used in training.
             self.global_step = tf.get_collection('global_step')[0]
             self.init_op = tf.get_collection('init_op')[0]
+            self.train_op_w = tf.get_collection('train_op_w')[0]
             self.train_op = tf.get_collection('train_op')[0]
             self.summary_op = tf.get_collection('summary_op')[0]
             self.raw_features_batch = tf.get_collection('raw_features_batch')[0]
@@ -628,9 +641,16 @@ class LogisticRegression(object):
             for step in range(self.max_train_steps):
                 if sv.should_stop():
                     break
+
+                # Train the softmax layer for 50000 steps and then train the full network (incl. transformation).
+                if step <= 50000:
+                    current_train_op = self.train_op_w
+                else:
+                    current_train_op = self.train_op
+
                 if step % 500 == 0:
                     _, summary, global_step_val = sess.run(
-                        [self.train_op, self.summary_op, self.global_step], feed_dict=train_feed_dict)
+                        [current_train_op, self.summary_op, self.global_step], feed_dict=train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
 
@@ -682,7 +702,7 @@ class LogisticRegression(object):
                                     global_step_val)
                                 print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
                 else:
-                    sess.run(self.train_op, feed_dict=train_feed_dict)
+                    sess.run(current_train_op, feed_dict=train_feed_dict)
 
         logging.info("Exited training loop.")
 
