@@ -174,37 +174,11 @@ def main(unused_argv):
     with open(FLAGS.validation_data_file, 'rb') as pickle_f:
         val_data, val_labels = pickle_load(pickle_f)
 
-    if FLAGS.start_new_model:
-        # Change Me!
-        tr_data_fn = transfer_learn_inception_resnet_v2
-        # If output_stride is 16, 1536, Conv2d_7b_1x1
-        # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
-        tr_data_paras = {'reshape': True, 'size': 1536}
-
-        # ...Start linear classifier...
-        # Compute weights and biases of linear classifier using normal equation.
-        # Linear search helps little.
-        train_data_pipeline = DataPipeline(reader=reader,
-                                           data_pattern=FLAGS.train_val_data_file,
-                                           batch_size=FLAGS.batch_size,
-                                           num_threads=FLAGS.num_threads)
-
-        linear_clf = LinearClassifier(logdir=path_join(FLAGS.logdir, 'linear_classifier'))
-        linear_clf.fit(train_data_pipeline, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
-                       tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
-                       l2_regs=np.logspace(-5, 5, num=10),
-                       validate_set=(val_data, val_labels), line_search=True)
-        linear_clf_weights, linear_clf_biases = linear_clf.weights, linear_clf.biases
-
-        logging.info('linear classifier weights and biases with shape {}, {}'.format(
-            linear_clf_weights.shape, linear_clf_biases.shape))
-        logging.debug('linear classifier weights and {} biases: {}.'.format(
-            linear_clf_weights, linear_clf_biases))
-        # ...Exit linear classifier...
-    else:
-        linear_clf_weights, linear_clf_biases = None, None
-        tr_data_fn = None
-        tr_data_paras = None
+    # Change Me!
+    tr_data_fn = transfer_learn_inception_resnet_v2
+    # If output_stride is 16, 1536, Conv2d_7b_1x1
+    # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
+    tr_data_paras = {'reshape': True, 'size': 1536}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
@@ -218,7 +192,6 @@ def main(unused_argv):
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
                 init_learning_rate=0.00001, decay_steps=NUM_TRAIN_IMAGES * 2,
-                initial_weights=linear_clf_weights, initial_biases=linear_clf_biases,
                 use_pretrain=True, pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope='InceptionResnetV2')
 
