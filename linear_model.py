@@ -291,33 +291,37 @@ class LogisticRegression(object):
         self.num_classes = None
         self.batch_size = None
         self.tr_data_fn = None
-        self.tr_data_paras = dict()
+        self.tr_data_paras = None
         self.init_learning_rate = None
         self.decay_steps = None
         self.decay_rate = None
         self.epochs = None
         self.l1_reg_rate = None
         self.l2_reg_rate = None
+        # positive / negative class weight.
+        # Used in binary classification, incl. one-vs-rest multi-label.
         self.pos_weights = None
+        # Used to initialize the soft-max layer.
         self.initial_weights = None
         self.initial_biases = None
 
         # Whether to use a pretrained model
         self.use_pretrain = False
-        self.pretrained_model = None
-        self.pretrained_saver = None
         self.pretrained_model_dir = None
         self.pretrained_scope = None
         self.pretrained_var_list = None
+        self.pretrained_saver = None
 
         self.graph = None
         # Member variables associated with graph.
-        self.saver = None
         self.global_step = None
         self.init_op = None
+        # Training op to optimize the loss with respect to the soft-max layer.
         self.train_op_w = None
+        # Training op to optimize the loss with respect to the whole network.
         self.train_op = None
         self.summary_op = None
+        self.saver = None
         self.raw_features_batch = None
         self.labels_batch = None
         self.loss = None
@@ -359,7 +363,7 @@ class LogisticRegression(object):
         tf.summary.histogram('model/weights', weights)
 
         if self.initial_biases is None:
-            biases = tf.Variable(initial_value=tf.fill([self.num_classes], 0.1), name='biases')
+            biases = tf.Variable(initial_value=tf.fill([self.num_classes], 0.01), name='biases')
         else:
             biases = tf.Variable(initial_value=self.initial_biases, name='biases')
 
@@ -378,7 +382,7 @@ class LogisticRegression(object):
 
         logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
 
-        pred_prob = tf.nn.softmax(logits, name='pred_probability')
+        pred_prob = tf.nn.softmax(logits, dim=-1, name='pred_probability')
 
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
 
@@ -494,9 +498,9 @@ class LogisticRegression(object):
             Return:
                 True if graph and all graph ops are not None, otherwise False.
             """
-            graph_ops = [self.saver, self.global_step, self.init_op, self.train_op, self.train_op_w,
-                         self.summary_op, self.raw_features_batch, self.labels_batch, self.loss,
-                         self.pred_prob, self.pred_labels]
+            graph_ops = [self.global_step, self.init_op, self.train_op, self.train_op_w,
+                         self.summary_op, self.saver, self.raw_features_batch, self.labels_batch,
+                         self.loss, self.pred_prob, self.pred_labels]
 
             return (self.graph is not None) and (graph_ops.count(None) == 0)
 
@@ -508,7 +512,7 @@ class LogisticRegression(object):
             logging.info("Pretrained checkpoint: {}".format(self.pretrained_checkpoint))
             self.pretrained_saver = tf.train.Saver(var_list=self.pretrained_var_list,
                                                    name='pretrained_saver')
-
+            # The inline function takes a session object as input.
             return lambda s: self.pretrained_saver.restore(s, self.pretrained_checkpoint)
         else:
             return None
@@ -571,16 +575,12 @@ class LogisticRegression(object):
 
         # Check extra data transform function arguments.
         # If transform changes the features size, change it.
-        if self.tr_data_fn is not None:
-            if self.tr_data_paras is None:
-                self.tr_data_paras = dict()
-            else:
-                if ('reshape' in self.tr_data_paras) and (self.tr_data_paras['reshape'] is True):
-                    self.feature_size = self.tr_data_paras['size']
-                    logging.warn('Data transform changes the features size to {}.'.format(
-                        self.feature_size))
-
-            logging.debug('Data transform arguments are {}.'.format(self.tr_data_paras))
+        if isinstance(self.tr_data_fn, dict):
+            if ('reshape' in self.tr_data_paras) and (self.tr_data_paras['reshape'] is True):
+                self.feature_size = self.tr_data_paras['size']
+                logging.warn('Data transform changes the features size to {}.'.format(
+                    self.feature_size))
+                logging.debug('Data transform arguments are {}.'.format(self.tr_data_paras))
         else:
             self.tr_data_paras = dict()
 
@@ -607,9 +607,10 @@ class LogisticRegression(object):
                     # Do nothing.
                     pass
 
-                # Build graph, namely building a graph and initialize member variables associated with graph.
+                # Build graph.
                 self.saver = self._build_graph()
             else:
+                # Restore from a checkpoint.
                 self.saver = self._restore_graph()
 
             # After either building a graph or restoring a graph, graph is CONSTRUCTED successfully.
@@ -649,8 +650,8 @@ class LogisticRegression(object):
                 if sv.should_stop():
                     break
 
-                # Train the softmax layer for 50000 steps and then train the full network (incl. transformation).
-                if step <= 50000:
+                # Train the softmax layer for 100000 steps and then train the full network.
+                if step <= 100000:
                     current_train_op = self.train_op_w
                     # Don't use dropout nor update batch normalization.
                     current_train_feed_dict = val_feed_dict
@@ -688,7 +689,7 @@ class LogisticRegression(object):
                                             self.raw_features_batch: val_data[start_ind:end_ind],
                                             self.labels_batch: val_labels[start_ind:end_ind]})
 
-                                    val_pred_labels.append(ith_pred_labels)
+                                    val_pred_labels.extend(ith_pred_labels)
                                 else:
                                     ith_val_loss_val = sess.run(
                                         self.loss, feed_dict={
@@ -705,16 +706,14 @@ class LogisticRegression(object):
 
                             if validation_fn is not None:
                                 val_func_name = validation_fn.__name__
-                                val_per = validation_fn(predictions=np.concatenate(val_pred_labels, axis=0),
-                                                        labels=val_labels)
+                                val_per = validation_fn(predictions=val_pred_labels, labels=val_labels)
 
                                 sv.summary_writer.add_summary(
                                     make_summary('validation/{}'.format(val_func_name), val_per),
                                     global_step_val)
                                 print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
                 else:
-                    sess.run(current_train_op,
-                             feed_dict=current_train_feed_dict)
+                    sess.run(current_train_op, feed_dict=current_train_feed_dict)
 
         logging.info("Exited training loop.")
 
