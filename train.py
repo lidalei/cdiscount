@@ -83,9 +83,9 @@ def create_conv_layer(input_val, filter_shape, strides, name):
         return output
 
 
-def tr_data_conv_fn(input_val, **kwargs):
+def tr_data_conv_fn(input_tensor, **kwargs):
     # Do not forget to cast images to float type.
-    value = tf.cast(input_val, tf.float32)
+    value = tf.cast(input_tensor, tf.float32)
     all_strides = []
     # Convolutional layer 1.
     filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
@@ -175,10 +175,10 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # Change Me!
-    tr_data_fn = transfer_learn_inception_resnet_v2
+    tr_data_fn = tr_data_conv_fn
     # If output_stride is 16, 1536, Conv2d_7b_1x1
     # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    tr_data_paras = {'reshape': True, 'size': 1024}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
