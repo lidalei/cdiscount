@@ -31,8 +31,9 @@ class LinearClassifier(object):
             tr_data_fn: a function that transforms input data.
             tr_data_paras: Other parameters should be passed to tr_data_fn. A dictionary.
             l2_regs: An array, each element represents how much the linear classifier weights should be penalized.
-            validate_set: (data, labels) with dtype float32. The data set (numpy arrays) used to choose the best l2_reg.
-                Sampled from whole validate set if necessary. If line_search is False, this argument is simply ignored.
+            validate_set: (data, labels) with dtype float32.
+                The data set (numpy arrays) used to choose the best l2_reg.
+                Sampled from whole validate set if necessary.
             line_search: Boolean argument representing whether to do boolean search.
 
         Returns: Weights and biases fit on the given data set, where biases are appended as the last row.
@@ -48,9 +49,9 @@ class LinearClassifier(object):
             raw_feature_size = [raw_feature_size]
         else:
             raw_feature_size = list(raw_feature_size)
-        feature_size = raw_feature_size
-
         logging.info('Linear regression uses {}-dimensional features.'.format(raw_feature_size))
+
+        feature_size = raw_feature_size
 
         if line_search:
             # Both l2_regs and validate_set are required.
@@ -63,11 +64,10 @@ class LinearClassifier(object):
                 raise ValueError('There is no validate_set to do line search for l2_reg.')
             else:
                 validate_data, validate_labels = validate_set
-
         else:
-            # Simply fit the training set. Make l2_regs have only one element. And ignore validate_set.
+            # Simply fit the training set. Make l2_regs have only one element.
             if l2_regs is None:
-                l2_regs = [0.0001]
+                l2_regs = [0.00001]
             elif isinstance(l2_regs, float):
                 l2_regs = [l2_regs]
             elif isinstance(l2_regs, list) or isinstance(l2_regs, tuple):
@@ -117,9 +117,8 @@ class LinearClassifier(object):
             labels_sum = tf.Variable(initial_value=tf.zeros([num_classes]), name='labels_sum')
 
             # label is one-hot encoded, int32 type.
-            id_batch, raw_features_batch, labels_batch = (
-                get_input_data_tensors(data_pipeline, onehot_label=True,
-                                       num_epochs=1, name_scope='input'))
+            id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
+                data_pipeline, onehot_label=True, num_epochs=1, name_scope='input')
             if tr_data_fn is None:
                 tr_features_batch = tf.identity(raw_features_batch)
             else:
@@ -176,8 +175,9 @@ class LinearClassifier(object):
 
             with tf.name_scope('loss'):
                 predictions = tf.matmul(tr_features_batch, weights) + biases
-                loss = tf.sqrt(tf.reduce_mean(
-                    tf.squared_difference(predictions, float_labels_batch)), name='rmse')
+
+                squared_loss = tf.reduce_sum(
+                    tf.squared_difference(predictions, float_labels_batch), name='squared_loss')
                 # pred_labels = tf.greater_equal(predictions, 0.0, name='pred_labels')
 
             summary_op = tf.summary.merge_all()
@@ -204,14 +204,13 @@ class LinearClassifier(object):
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
-        step = 0
         try:
             while not coord.should_stop():
-                step += 1
-                print('Step: {}'.format(step))
                 _, summary, global_step_val = sess.run([update_equ_non_op, summary_op, global_step],
                                                        feed_dict=val_feed_dict)
                 summary_writer.add_summary(summary, global_step=global_step_val)
+
+                print('Done step {}.'.format(global_step_val))
         except tf.errors.OutOfRangeError:
             logging.info('Finished normal equation terms computation -- one epoch done.')
         finally:
@@ -233,7 +232,8 @@ class LinearClassifier(object):
             # Compute validation loss.
             num_validate_videos = validate_data.shape[0]
             split_indices = np.linspace(0, num_validate_videos + 1,
-                                        num=max(num_validate_videos // batch_size, 2), dtype=np.int32)
+                                        num=max(num_validate_videos // batch_size, 2),
+                                        dtype=np.int32)
             loss_vals = []
             for i in range(len(split_indices) - 1):
                 start_ind = split_indices[i]
@@ -244,14 +244,15 @@ class LinearClassifier(object):
                 par_val_labels = np.eye(num_classes)[validate_labels[start_ind:end_ind]]
 
                 # Avoid re-computing weights and biases (Otherwise, l2_reg_ph is necessary).
-                ith_loss_val = sess.run(loss,
+                # ith_loss_val is the total squared loss of the batch.
+                ith_loss_val = sess.run(squared_loss,
                                         feed_dict={
                                             raw_features_batch: par_val_data,
                                             float_labels_batch: par_val_labels,
                                             weights: weights_val,
                                             biases: biases_val})
 
-                loss_vals.append(ith_loss_val * (end_ind - start_ind))
+                loss_vals.append(ith_loss_val)
 
             validate_loss_val = sum(loss_vals) / num_validate_videos
 
@@ -418,24 +419,26 @@ class LogisticRegression(object):
             # optimize both softmax and transformation layer simultaneously.
 
             # Decayed learning rate.
-            rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            adap_learning_rate_w = tf.train.exponential_decay(self.init_learning_rate,
-                                                              rough_num_examples_processed,
-                                                              self.decay_steps,
-                                                              self.decay_rate,
-                                                              staircase=True,
-                                                              name='adap_learning_rate')
-            tf.summary.scalar('learning_rate_w', adap_learning_rate_w)
+            # rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
+            # adap_learning_rate_w = tf.train.exponential_decay(self.init_learning_rate,
+            #                                                   rough_num_examples_processed,
+            #                                                   self.decay_steps,
+            #                                                   self.decay_rate,
+            #                                                   staircase=True,
+            #                                                   name='adap_learning_rate')
+            # tf.summary.scalar('learning_rate_w', adap_learning_rate_w)
             # GradientDescentOptimizer
-            optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
+            # optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
             # MomentumOptimizer
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
-            train_op_w = optimizer_w.minimize(final_loss,
-                                              global_step=global_step,
-                                              var_list=[weights, biases])
+
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
+
+            train_op_w = optimizer.minimize(final_loss,
+                                            global_step=global_step,
+                                            var_list=[weights, biases])
 
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate / 10.0)
             train_op = optimizer.minimize(final_loss, global_step=global_step)
 
         summary_op = tf.summary.merge_all()
@@ -657,7 +660,8 @@ class LogisticRegression(object):
 
                 if step % 500 == 0:
                     _, summary, global_step_val = sess.run(
-                        [current_train_op, self.summary_op, self.global_step], feed_dict=current_train_feed_dict)
+                        [current_train_op, self.summary_op, self.global_step],
+                        feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
 
@@ -709,7 +713,8 @@ class LogisticRegression(object):
                                     global_step_val)
                                 print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
                 else:
-                    sess.run(current_train_op, feed_dict=current_train_feed_dict)
+                    sess.run(current_train_op,
+                             feed_dict=current_train_feed_dict)
 
         logging.info("Exited training loop.")
 
