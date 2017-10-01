@@ -191,7 +191,7 @@ def main(unused_argv):
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
-                init_learning_rate=0.001, decay_steps=NUM_TRAIN_IMAGES * 2,
+                init_learning_rate=0.0001, decay_steps=NUM_TRAIN_IMAGES * 2,
                 use_pretrain=True, pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope='InceptionResnetV2')
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
 
     flags.DEFINE_integer('batch_size', 64, 'The training batch size.')
 
-    flags.DEFINE_integer('num_threads', 2,
+    flags.DEFINE_integer('num_threads', 4,
                          'The number of threads to read the tfrecord file.')
 
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,

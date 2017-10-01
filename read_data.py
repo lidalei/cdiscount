@@ -210,7 +210,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
                                        allow_smaller_final_batch=True,
                                        enqueue_many=True))
         else:
-            capacity = (num_threads + 1) * batch_size
+            capacity = (num_threads + 2) * batch_size
             id_batch, image_batch, category_batch = (
                 tf.train.batch(examples, batch_size, num_threads=num_threads,
                                capacity=capacity,

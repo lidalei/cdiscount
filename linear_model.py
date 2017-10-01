@@ -440,10 +440,12 @@ class LogisticRegression(object):
 
             train_op_w = optimizer.minimize(final_loss,
                                             global_step=global_step,
-                                            var_list=[weights, biases])
+                                            var_list=[weights, biases],
+                                            name='opt_softmax')
 
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
-            train_op = optimizer.minimize(final_loss, global_step=global_step)
+            train_op = optimizer.minimize(final_loss, global_step=global_step,
+                                          name='opt_full_network')
 
         summary_op = tf.summary.merge_all()
         # summary_op = tf.constant(1.0)
