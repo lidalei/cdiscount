@@ -575,7 +575,7 @@ class LogisticRegression(object):
 
         # Check extra data transform function arguments.
         # If transform changes the features size, change it.
-        if isinstance(self.tr_data_fn, dict):
+        if isinstance(self.tr_data_paras, dict):
             if ('reshape' in self.tr_data_paras) and (self.tr_data_paras['reshape'] is True):
                 self.feature_size = self.tr_data_paras['size']
                 logging.warn('Data transform changes the features size to {}.'.format(
