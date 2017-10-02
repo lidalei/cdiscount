@@ -656,8 +656,8 @@ class LogisticRegression(object):
                 if sv.should_stop():
                     break
 
-                # Train the softmax layer for 100000 steps and then train the full network.
-                if self.use_pretrain and step <= 100000:
+                # Train the softmax layer for 10000 steps and then train the full network.
+                if self.use_pretrain and step <= 10000:
                     current_train_op = self.train_op_w
                     # Don't use dropout nor update batch normalization.
                     current_train_feed_dict = val_feed_dict
