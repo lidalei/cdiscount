@@ -650,7 +650,9 @@ class LogisticRegression(object):
 
         with sv.managed_session() as sess:
             logging.info("Entering training loop...")
-            for step in range(self.max_train_steps):
+            # Obtain the current training step. Continue training from a checkpoint.
+            start_step = sess.run(self.global_step)
+            for step in range(start_step, self.max_train_steps):
                 if sv.should_stop():
                     break
 
