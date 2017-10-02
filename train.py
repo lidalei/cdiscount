@@ -192,7 +192,8 @@ def main(unused_argv):
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
                 init_learning_rate=0.0001, decay_steps=NUM_TRAIN_IMAGES * 2,
-                use_pretrain=True, pretrained_model_dir=FLAGS.pretrained_model_dir,
+                use_pretrain=FLAGS.start_new_model,
+                pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope='InceptionResnetV2')
 
 
