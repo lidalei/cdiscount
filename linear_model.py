@@ -349,7 +349,10 @@ class LogisticRegression(object):
 
         # Get training data
         id_batch, raw_features_batch, labels_batch = (
-            get_input_data_tensors(self.train_data_pipeline, shuffle=True, num_epochs=self.epochs,
+            get_input_data_tensors(self.train_data_pipeline,
+                                   onehot_label=True,
+                                   shuffle=True,
+                                   num_epochs=self.epochs,
                                    name_scope='input'))
 
         # Define num_classes logistic regression models parameters.
@@ -388,9 +391,14 @@ class LogisticRegression(object):
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
 
         with tf.name_scope('train'):
-            # TODO, multi-label uses sigmoid_cross_entropy_with_logits
-            loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=labels_batch, logits=logits, name='x_entropy_per_example')
+            # multi-class classification
+            # loss_per_example = tf.nn.softmax_cross_entropy_with_logits(
+            #     labels=labels_batch, logits=logits, name='x_entropy_per_example')
+
+            # multi-label classification
+            loss_per_example = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=tf.cast(labels_batch, tf.float32), logits=logits), axis=-1,
+                name='x_entropy_per_example')
 
             loss = tf.reduce_mean(loss_per_example, name='x_entropy')
 
