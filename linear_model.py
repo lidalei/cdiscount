@@ -187,7 +187,8 @@ class LinearClassifier(object):
 
             phase_train_pls = tf.get_collection('phase_train_pl')
             phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
-            val_feed_dict = {phase_train_pl: False} if phase_train_pl is not None else {}
+            # TODO, change True to False
+            val_feed_dict = {phase_train_pl: True} if phase_train_pl is not None else {}
 
         sess = tf.Session(graph=graph)
         # Initialize variables.
@@ -632,7 +633,8 @@ class LogisticRegression(object):
             self.phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
 
             train_feed_dict = {self.phase_train_pl: True} if self.phase_train_pl is not None else {}
-            val_feed_dict = {self.phase_train_pl: False} if self.phase_train_pl is not None else {}
+            # TODO, change True to False
+            val_feed_dict = {self.phase_train_pl: True} if self.phase_train_pl is not None else {}
 
         if self._check_graph_initialized():
             logging.info('Succeeded to initialize logistic regression Graph.')
@@ -661,14 +663,14 @@ class LogisticRegression(object):
                     current_train_op = self.train_op
                     current_train_feed_dict = train_feed_dict
 
-                if step % 200 == 0:
+                if step % 400 == 0:
                     _, summary, global_step_val = sess.run(
                         [current_train_op, self.summary_op, self.global_step],
                         feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
 
-                    if step % 500 == 0:
+                    if step % 800 == 0:
                         # Compute validation loss and performance (validation_fn).
                         if validation_set is not None:
                             val_data, val_labels = validation_set
