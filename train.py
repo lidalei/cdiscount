@@ -172,18 +172,15 @@ def transfer_learn_inception_v4(images, **kwargs):
         float_imgs = tf.cast(images, tf.float32)
         # dropout and batch normalization need to know the phase, training or validation (test).
         # Used for dropout and batch normalization. By default True.
-        # phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
-        # tf.add_to_collection('phase_train_pl', phase_train_pl)
+        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+        tf.add_to_collection('phase_train_pl', phase_train_pl)
 
         # Scale the imgs to [-1, +1]
         # TODO, other pre-process.
         scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
-        """
+
         _, end_points = inception_v4(
             scaled_imgs, is_training=phase_train_pl, create_aux_logits=False)
-        """
-        _, end_points = inception_v4(
-            scaled_imgs, is_training=True, create_aux_logits=False)
 
         return end_points['PreLogitsFlatten']
 
