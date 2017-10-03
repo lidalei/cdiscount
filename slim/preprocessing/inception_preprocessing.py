@@ -302,11 +302,8 @@ def preprocess_image(image, height, width,
   Raises:
     ValueError: if user does not provide bounding box
   """
-    return tf.cond(is_training,
-                   true_fn=preprocess_for_train(image, height, width, bbox, fast_mode),
-                   false_fn=preprocess_for_eval(image, height, width)
-                   )
-    # if is_training:
-    #     return preprocess_for_train(image, height, width, bbox, fast_mode)
-    # else:
-    #     return preprocess_for_eval(image, height, width)
+    # TODO, call this function in get_input_tensor while training or testing.
+    if is_training:
+        return preprocess_for_train(image, height, width, bbox, fast_mode)
+    else:
+        return preprocess_for_eval(image, height, width)
