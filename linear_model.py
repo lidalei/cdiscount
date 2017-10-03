@@ -678,12 +678,14 @@ class LogisticRegression(object):
                     current_train_feed_dict = train_feed_dict
 
                 if step % 400 == 0:
-                    _, summary, accuracy_val, global_step_val = sess.run(
-                        [current_train_op, self.summary_op, self.accuracy, self.global_step],
+                    _, summary, loss_val, accuracy_val, global_step_val = sess.run(
+                        [current_train_op, self.summary_op, self.loss, self.accuracy, self.global_step],
                         feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
-                    # Add training accuracy summary.
+                    # Add training loss and accuracy summary.
+                    print('Step {}, training loss {}, accuracy {}'.format(
+                        global_step_val, loss_val, accuracy_val))
                     sv.summary_writer.add_summary(
                         make_summary('train/accuracy', accuracy_val), global_step_val)
 
@@ -716,6 +718,8 @@ class LogisticRegression(object):
 
                             val_loss_val = sum(val_loss_vals) / num_val_images
                             val_accuracy_val = sum(val_accuracy_vals) / num_val_images
+                            print('Step {}, validation loss {}, accuracy {}'.format(
+                                global_step_val, val_loss_val, val_accuracy_val))
                             # Add validation summary.
                             sv.summary_writer.add_summary(
                                 make_summary('validation/xentropy', val_loss_val), global_step_val)
