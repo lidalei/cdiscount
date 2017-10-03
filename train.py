@@ -14,7 +14,8 @@ from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
 from linear_model import LogisticRegression
 
-import nets.inception_resnet_v2 as inception
+from nets.inception import inception_resnet_v2_arg_scope, inception_resnet_v2
+from nets.inception import inception_v4_arg_scope, inception_v4
 
 from functools import reduce
 from operator import mul
@@ -148,7 +149,7 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
         dimension [batch_size x height x width x channels]
     :return: The flattened just before the softmax layer.
     """
-    arg_scope = inception.inception_resnet_v2_arg_scope()
+    arg_scope = inception_resnet_v2_arg_scope()
     with slim.arg_scope(arg_scope):
         # Do not forget to cast images to float type.
         input_val = tf.cast(inputs, tf.float32)
@@ -157,11 +158,26 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
         phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
         tf.add_to_collection('phase_train_pl', phase_train_pl)
         # If output_stride is 8, create_aux_logits. If 16, not create_aux_logits.
-        _, end_points = inception.inception_resnet_v2(
+        _, end_points = inception_resnet_v2(
             input_val, is_training=phase_train_pl, create_aux_logits=False)
         tr_features = end_points['PreLogitsFlatten']
 
         return tr_features
+
+
+def transfer_learn_inception_v4(inputs, **kwargs):
+    arg_scope = inception_v4_arg_scope()
+    with slim.arg_scope(arg_scope):
+        # Do not forget to cast images to float type.
+        input_val = tf.cast(inputs, tf.float32)
+        # dropout and batch normalization need to know the phase, training or validation (test).
+        # Used for dropout and batch normalization. By default True.
+        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+        tf.add_to_collection('phase_train_pl', phase_train_pl)
+        _, end_points = inception_v4(
+            input_val, is_training=phase_train_pl, create_aux_logits=False)
+
+        return end_points['PreLogitsFlatten']
 
 
 def main(unused_argv):
