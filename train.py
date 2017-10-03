@@ -230,13 +230,13 @@ if __name__ == '__main__':
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
-    flags.DEFINE_boolean('use_pretrain', False,
+    flags.DEFINE_boolean('use_pretrain', True,
                          'Whether to (partially) use pretrained model')
 
-    flags.DEFINE_string('pretrained_model_dir', 'inception_resnet_v2_model/',
+    flags.DEFINE_string('pretrained_model_dir', 'inception_v4_model/',
                         'The pickle file which stores the validation set.')
 
-    flags.DEFINE_string('pretrained_scope', 'InceptionResnetV2',
+    flags.DEFINE_string('pretrained_scope', 'InceptionV4',
                         'The variable scope which contains the pretrained variables to store.')
 
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')

@@ -19,3 +19,5 @@ validation_all.tfrecord
 validation_minor.pickle
 
 train_val.tfrecord
+
+inception_v4_model/inception_v4.ckpt

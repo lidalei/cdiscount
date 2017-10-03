@@ -446,7 +446,7 @@ class LogisticRegression(object):
             # MomentumOptimizer
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
 
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate)
 
             train_op_w = optimizer.minimize(final_loss,
                                             global_step=global_step,
