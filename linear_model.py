@@ -328,6 +328,7 @@ class LogisticRegression(object):
         self.loss = None
         self.pred_prob = None
         self.pred_labels = None
+        self.accuracy = None
         self.phase_train_pl = None
 
     def _build_graph(self):
@@ -386,10 +387,9 @@ class LogisticRegression(object):
             logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
         logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
-
         pred_prob = tf.nn.softmax(logits, dim=-1, name='pred_probability')
-
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
+        accuracy = tf.metrics.accuracy(labels_batch, pred_labels, name='accuracy')
 
         with tf.name_scope('train'):
             # multi-class classification
@@ -423,6 +423,7 @@ class LogisticRegression(object):
 
             if len(reg_losses) > 0:
                 reg_loss = tf.add_n(reg_losses, name='reg_loss')
+                tf.summary.scalar('reg_loss', reg_loss)
             else:
                 reg_loss = tf.constant(0.0, name='zero_reg_loss')
 
@@ -475,6 +476,7 @@ class LogisticRegression(object):
         tf.add_to_collection('loss', loss)
         tf.add_to_collection('pred_prob', pred_prob)
         tf.add_to_collection('pred_labels', pred_labels)
+        tf.add_to_collection('accuracy', accuracy)
 
         # To save global variables and savable objects, i.e., var_list is None.
         # Using rbf transform will also save centers and scaling factors.
@@ -512,7 +514,7 @@ class LogisticRegression(object):
             """
             graph_ops = [self.global_step, self.init_op, self.train_op, self.train_op_w,
                          self.summary_op, self.saver, self.raw_features_batch, self.labels_batch,
-                         self.loss, self.pred_prob, self.pred_labels]
+                         self.loss, self.pred_prob, self.pred_labels, self.accuracy]
 
             return (self.graph is not None) and (graph_ops.count(None) == 0)
 
@@ -637,6 +639,7 @@ class LogisticRegression(object):
             self.loss = tf.get_collection('loss')[0]
             self.pred_prob = tf.get_collection('pred_prob')[0]
             self.pred_labels = tf.get_collection('pred_labels')[0]
+            self.accuracy = tf.get_collection('accuracy')[0]
 
             phase_train_pls = tf.get_collection('phase_train_pl')
             self.phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
@@ -675,11 +678,14 @@ class LogisticRegression(object):
                     current_train_feed_dict = train_feed_dict
 
                 if step % 400 == 0:
-                    _, summary, global_step_val = sess.run(
-                        [current_train_op, self.summary_op, self.global_step],
+                    _, summary, accuracy_val, global_step_val = sess.run(
+                        [current_train_op, self.summary_op, self.accuracy, self.global_step],
                         feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
+                    # Add training accuracy summary.
+                    sv.summary_writer.add_summary(
+                        make_summary('train/accuracy', accuracy_val), global_step_val)
 
                     if step % 800 == 0:
                         # Compute validation loss and performance (validation_fn).
