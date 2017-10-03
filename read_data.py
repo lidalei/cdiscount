@@ -140,8 +140,7 @@ class DataTFReader(object):
         imgs.set_shape([None, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS])
 
         # Scale the imgs to [-1, +1]
-        scaled_imgs = tf.scalar_mul(2.0, tf.subtract(
-            tf.scalar_mul(1.0 / 255.0, tf.cast(imgs, tf.float32)), 0.5))
+        scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, tf.cast(imgs, tf.float32)), 1.0)
 
         labels = features['category_id']
 
