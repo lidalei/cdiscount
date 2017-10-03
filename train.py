@@ -192,9 +192,9 @@ def main(unused_argv):
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
                 init_learning_rate=0.0001, decay_steps=NUM_TRAIN_IMAGES * 2,
-                use_pretrain=FLAGS.start_new_model,
+                use_pretrain=FLAGS.use_pretrain,
                 pretrained_model_dir=FLAGS.pretrained_model_dir,
-                pretrained_scope='InceptionResnetV2')
+                pretrained_scope=FLAGS.pretrained_scope)
 
 
 if __name__ == '__main__':
@@ -214,8 +214,14 @@ if __name__ == '__main__':
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
+    flags.DEFINE_boolean('use_pretrain', False,
+                         'Whether to (partially) use pretrained model')
+
     flags.DEFINE_string('pretrained_model_dir', 'inception_resnet_v2_model/',
                         'The pickle file which stores the validation set.')
+
+    flags.DEFINE_string('pretrained_scope', 'InceptionResnetV2',
+                        'The variable scope which contains the pretrained variables to store.')
 
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
 

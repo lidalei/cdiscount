@@ -188,7 +188,7 @@ class LinearClassifier(object):
             phase_train_pls = tf.get_collection('phase_train_pl')
             phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
             # TODO, change True to False
-            val_feed_dict = {phase_train_pl: True} if phase_train_pl is not None else {}
+            val_feed_dict = {phase_train_pl: False} if phase_train_pl is not None else {}
 
         sess = tf.Session(graph=graph)
         # Initialize variables.
@@ -383,6 +383,7 @@ class LogisticRegression(object):
             self.pretrained_var_list = self.graph.get_collection(
                 tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
                 tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
+            logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
         logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
 
@@ -642,7 +643,7 @@ class LogisticRegression(object):
 
             train_feed_dict = {self.phase_train_pl: True} if self.phase_train_pl is not None else {}
             # TODO, change True to False
-            val_feed_dict = {self.phase_train_pl: True} if self.phase_train_pl is not None else {}
+            val_feed_dict = {self.phase_train_pl: False} if self.phase_train_pl is not None else {}
 
         if self._check_graph_initialized():
             logging.info('Succeeded to initialize logistic regression Graph.')
@@ -690,7 +691,7 @@ class LogisticRegression(object):
                             # Compute validation loss.
                             num_val_images = len(val_labels)
                             split_indices = np.linspace(0, num_val_images + 1,
-                                                        num=max(num_val_images // batch_size, 2),
+                                                        num=max(num_val_images // self.batch_size, 2),
                                                         dtype=np.int32)
 
                             val_loss_vals, val_pred_labels = [], []
