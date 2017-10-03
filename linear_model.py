@@ -684,7 +684,7 @@ class LogisticRegression(object):
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
                     # Add training loss and accuracy summary.
-                    print('Step {}, training loss {}, accuracy {}'.format(
+                    print('Step {}, training loss {:.6f}, accuracy {:.6f}'.format(
                         global_step_val, loss_val, accuracy_val))
                     sv.summary_writer.add_summary(
                         make_summary('train/accuracy', accuracy_val), global_step_val)
@@ -718,7 +718,7 @@ class LogisticRegression(object):
 
                             val_loss_val = sum(val_loss_vals) / num_val_images
                             val_accuracy_val = sum(val_accuracy_vals) / num_val_images
-                            print('Step {}, validation loss {}, accuracy {}'.format(
+                            print('Step {}, validation loss {:.6f}, accuracy {:.6f}'.format(
                                 global_step_val, val_loss_val, val_accuracy_val))
                             # Add validation summary.
                             sv.summary_writer.add_summary(
