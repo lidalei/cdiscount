@@ -342,28 +342,40 @@ def inception_resnet_v2(inputs, num_classes=1001, is_training=True,
 
 
 def inception_resnet_v2_arg_scope(weight_decay=0.00004,
+                                  use_batch_norm=True,
                                   batch_norm_decay=0.9997,
                                   batch_norm_epsilon=0.001):
     """Returns the scope with the default parameters for inception_resnet_v2.
 
   Args:
     weight_decay: the weight decay for weights variables.
+    use_batch_norm: "If `True`, batch_norm is applied after each convolution.
     batch_norm_decay: decay for the moving average of batch_norm momentums.
     batch_norm_epsilon: small float added to variance to avoid dividing by zero.
 
   Returns:
     a arg_scope with the parameters needed for inception_resnet_v2.
   """
+    batch_norm_params = {
+        # Decay for the moving averages.
+        'decay': batch_norm_decay,
+        # epsilon to prevent 0s in variance.
+        'epsilon': batch_norm_epsilon,
+        # collection containing update_ops.
+        'updates_collections': tf.GraphKeys.UPDATE_OPS,
+    }
+    if use_batch_norm:
+        normalizer_fn = slim.batch_norm
+        normalizer_params = batch_norm_params
+    else:
+        normalizer_fn = None
+        normalizer_params = {}
+
     # Set weight_decay for weights in conv2d and fully_connected layers.
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                        weights_regularizer=slim.l2_regularizer(weight_decay),
-                        biases_regularizer=slim.l2_regularizer(weight_decay)):
-        batch_norm_params = {
-            'decay': batch_norm_decay,
-            'epsilon': batch_norm_epsilon,
-        }
+                        weights_regularizer=slim.l2_regularizer(weight_decay)):
         # Set activation_fn and parameters for batch_norm.
         with slim.arg_scope([slim.conv2d], activation_fn=tf.nn.relu,
-                            normalizer_fn=slim.batch_norm,
-                            normalizer_params=batch_norm_params) as scope:
+                            normalizer_fn=normalizer_fn,
+                            normalizer_params=normalizer_params) as scope:
             return scope
