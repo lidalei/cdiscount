@@ -14,8 +14,8 @@ from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
 from linear_model import LogisticRegression
 
-from nets.inception import inception_resnet_v2_arg_scope, inception_resnet_v2
-from nets.inception import inception_v4_arg_scope, inception_v4
+from slim.nets.inception import inception_resnet_v2_arg_scope, inception_resnet_v2
+from slim.nets.inception import inception_v4_arg_scope, inception_v4
 
 from functools import reduce
 from operator import mul
