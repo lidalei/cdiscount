@@ -350,7 +350,7 @@ class LogisticRegression(object):
         # Get training data
         id_batch, raw_features_batch, labels_batch = (
             get_input_data_tensors(self.train_data_pipeline,
-                                   onehot_label=True,
+                                   onehot_label=False,
                                    shuffle=True,
                                    num_epochs=self.epochs,
                                    name_scope='input'))
@@ -392,13 +392,13 @@ class LogisticRegression(object):
 
         with tf.name_scope('train'):
             # multi-class classification
-            # loss_per_example = tf.nn.softmax_cross_entropy_with_logits(
-            #     labels=labels_batch, logits=logits, name='x_entropy_per_example')
+            loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=labels_batch, logits=logits, name='x_entropy_per_example')
 
             # multi-label classification
-            loss_per_example = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=tf.cast(labels_batch, tf.float32), logits=logits), axis=-1,
-                name='x_entropy_per_example')
+            # loss_per_example = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
+            #     labels=tf.cast(labels_batch, tf.float32), logits=logits), axis=-1,
+            #     name='x_entropy_per_example')
 
             loss = tf.reduce_mean(loss_per_example, name='x_entropy')
 
@@ -684,6 +684,8 @@ class LogisticRegression(object):
                         # Compute validation loss and performance (validation_fn).
                         if validation_set is not None:
                             val_data, val_labels = validation_set
+                            # multi-label classification requires onehot-encoded labels
+                            # eye_mat = np.eye(num_classes)
 
                             # Compute validation loss.
                             num_val_images = len(val_labels)
