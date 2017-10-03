@@ -191,7 +191,7 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # Change Me!
-    tr_data_fn = transfer_learn_inception_resnet_v2
+    tr_data_fn = transfer_learn_inception_v4
     # If output_stride is 16, 1536, Conv2d_7b_1x1
     # If output_stride is 8, 3 * 3 * 1088, PreAuxlogits
     tr_data_paras = {'reshape': True, 'size': 1536}

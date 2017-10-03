@@ -71,7 +71,7 @@ class BootstrapInference(object):
                 self.pred_prob_list.append(pred_prob)
                 if len(phase_train_pl) >= 1:
                     # TODO, change True to False
-                    self.phase_train_pl_list.append({phase_train_pl[0]: True})
+                    self.phase_train_pl_list.append({phase_train_pl[0]: False})
                 else:
                     self.phase_train_pl_list.append({})
 
