@@ -700,41 +700,27 @@ class LogisticRegression(object):
                                                         num=max(num_val_images // self.batch_size, 2),
                                                         dtype=np.int32)
 
-                            val_loss_vals, val_pred_labels = [], []
+                            val_loss_vals, val_accuracy_vals = [], []
                             for i in range(len(split_indices) - 1):
                                 start_ind = split_indices[i]
                                 end_ind = split_indices[i + 1]
 
-                                if validation_fn is not None:
-                                    ith_val_loss_val, ith_pred_labels = sess.run(
-                                        [self.loss, self.pred_labels], feed_dict={
-                                            **val_feed_dict,
-                                            self.raw_features_batch: val_data[start_ind:end_ind],
-                                            self.labels_batch: val_labels[start_ind:end_ind]})
-
-                                    val_pred_labels.extend(ith_pred_labels)
-                                else:
-                                    ith_val_loss_val = sess.run(
-                                        self.loss, feed_dict={
-                                            **val_feed_dict,
-                                            self.raw_features_batch: val_data[start_ind:end_ind],
-                                            self.labels_batch: val_labels[start_ind:end_ind]})
+                                ith_val_loss_val, ith_accuracy_val = sess.run(
+                                    [self.loss, self.accuracy], feed_dict={
+                                        **val_feed_dict,
+                                        self.raw_features_batch: val_data[start_ind:end_ind],
+                                        self.labels_batch: val_labels[start_ind:end_ind]})
 
                                 val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
+                                val_accuracy_vals.append(ith_accuracy_val * (end_ind - start_ind))
 
                             val_loss_val = sum(val_loss_vals) / num_val_images
+                            val_accuracy_val = sum(val_accuracy_vals) / num_val_images
                             # Add validation summary.
                             sv.summary_writer.add_summary(
                                 make_summary('validation/xentropy', val_loss_val), global_step_val)
-
-                            if validation_fn is not None:
-                                val_func_name = validation_fn.__name__
-                                val_per = validation_fn(predictions=val_pred_labels, labels=val_labels)
-
-                                sv.summary_writer.add_summary(
-                                    make_summary('validation/{}'.format(val_func_name), val_per),
-                                    global_step_val)
-                                print('Step {}, validation {}: {}.'.format(global_step_val, val_func_name, val_per))
+                            sv.summary_writer.add_summary(
+                                make_summary('validation/accuracy', val_accuracy_val), global_step_val)
                 else:
                     sess.run(current_train_op, feed_dict=current_train_feed_dict)
 
