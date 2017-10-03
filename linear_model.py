@@ -328,7 +328,6 @@ class LogisticRegression(object):
         self.loss = None
         self.pred_prob = None
         self.pred_labels = None
-        self.accuracy = None
         self.phase_train_pl = None
 
     def _build_graph(self):
@@ -514,7 +513,7 @@ class LogisticRegression(object):
             """
             graph_ops = [self.global_step, self.init_op, self.train_op, self.train_op_w,
                          self.summary_op, self.saver, self.raw_features_batch, self.labels_batch,
-                         self.loss, self.pred_prob, self.pred_labels, self.accuracy]
+                         self.loss, self.pred_prob, self.pred_labels]
 
             return (self.graph is not None) and (graph_ops.count(None) == 0)
 
@@ -639,7 +638,6 @@ class LogisticRegression(object):
             self.loss = tf.get_collection('loss')[0]
             self.pred_prob = tf.get_collection('pred_prob')[0]
             self.pred_labels = tf.get_collection('pred_labels')[0]
-            self.accuracy = tf.get_collection('accuracy')[0]
 
             phase_train_pls = tf.get_collection('phase_train_pl')
             self.phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
@@ -678,16 +676,13 @@ class LogisticRegression(object):
                     current_train_feed_dict = train_feed_dict
 
                 if step % 400 == 0:
-                    _, summary, loss_val, accuracy_val, global_step_val = sess.run(
-                        [current_train_op, self.summary_op, self.loss, self.accuracy, self.global_step],
+                    _, summary, loss_val, global_step_val = sess.run(
+                        [current_train_op, self.summary_op, self.loss, self.global_step],
                         feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
                     # Add training loss and accuracy summary.
-                    print('Step {}, training loss {:.6f}, accuracy {:.6f}'.format(
-                        global_step_val, loss_val, accuracy_val))
-                    sv.summary_writer.add_summary(
-                        make_summary('train/accuracy', accuracy_val), global_step_val)
+                    print('Step {}, training loss {:.6f}'.format(global_step_val, loss_val))
 
                     if step % 800 == 0:
                         # Compute validation loss and performance (validation_fn).
@@ -702,29 +697,45 @@ class LogisticRegression(object):
                                                         num=max(num_val_images // self.batch_size, 2),
                                                         dtype=np.int32)
 
-                            val_loss_vals, val_accuracy_vals = [], []
+                            val_loss_vals, val_pred_labels = [], []
                             for i in range(len(split_indices) - 1):
                                 start_ind = split_indices[i]
                                 end_ind = split_indices[i + 1]
 
-                                ith_val_loss_val, ith_accuracy_val = sess.run(
-                                    [self.loss, self.accuracy], feed_dict={
-                                        **val_feed_dict,
-                                        self.raw_features_batch: val_data[start_ind:end_ind],
-                                        self.labels_batch: val_labels[start_ind:end_ind]})
+                                if validation_fn is not None:
+                                    ith_val_loss_val, ith_pred_labels = sess.run(
+                                        [self.loss, self.pred_labels], feed_dict={
+                                            **val_feed_dict,
+                                            self.raw_features_batch: val_data[start_ind:end_ind],
+                                            self.labels_batch: val_labels[start_ind:end_ind]})
+
+                                    val_pred_labels.extend(ith_pred_labels)
+                                else:
+                                    ith_val_loss_val = sess.run(
+                                        self.loss, feed_dict={
+                                            **val_feed_dict,
+                                            self.raw_features_batch: val_data[start_ind:end_ind],
+                                            self.labels_batch: val_labels[start_ind:end_ind]})
 
                                 val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
-                                val_accuracy_vals.append(ith_accuracy_val * (end_ind - start_ind))
 
                             val_loss_val = sum(val_loss_vals) / num_val_images
-                            val_accuracy_val = sum(val_accuracy_vals) / num_val_images
-                            print('Step {}, validation loss {:.6f}, accuracy {:.6f}'.format(
-                                global_step_val, val_loss_val, val_accuracy_val))
                             # Add validation summary.
                             sv.summary_writer.add_summary(
                                 make_summary('validation/xentropy', val_loss_val), global_step_val)
-                            sv.summary_writer.add_summary(
-                                make_summary('validation/accuracy', val_accuracy_val), global_step_val)
+
+                            if validation_fn is not None:
+                                val_func_name = validation_fn.__name__
+                                val_per = validation_fn(predictions=val_pred_labels, labels=val_labels)
+
+                                sv.summary_writer.add_summary(
+                                    make_summary('validation/{}'.format(val_func_name), val_per),
+                                    global_step_val)
+                                print('Step {}, validation loss: {}, {}: {}.'.format(
+                                    global_step_val, val_loss_val, val_func_name, val_per))
+                            else:
+                                print('Step {}, validation loss: {}.'.format(
+                                    global_step_val, val_loss_val))
                 else:
                     sess.run(current_train_op, feed_dict=current_train_feed_dict)
 
