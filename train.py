@@ -12,9 +12,9 @@ from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
 from constants import TRAIN_VAL_TF_DATA_FILE_NAME
 from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
-from linear_model import LogisticRegression, LinearClassifier
+from linear_model import LogisticRegression
 
-import inception_resnet_v2 as inception
+import nets.inception_resnet_v2 as inception
 
 from functools import reduce
 from operator import mul
