@@ -139,6 +139,9 @@ class DataTFReader(object):
                          dtype=tf.uint8)
         imgs.set_shape([None, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS])
 
+        # Scale the imgs to [-1, +1]
+        scaled_imgs = tf.scalar_mul(2.0, tf.subtract(tf.scalar_mul(1.0 / 255.0, imgs), 0.5))
+
         labels = features['category_id']
 
         if onehot_label:
@@ -146,9 +149,9 @@ class DataTFReader(object):
                                         on_value=1, off_value=0,
                                         dtype=tf.int32, axis=-1)
 
-            return img_ids, imgs, one_hot_labels
+            return img_ids, scaled_imgs, one_hot_labels
         else:
-            return img_ids, imgs, labels
+            return img_ids, scaled_imgs, labels
 
 
 def get_input_data_tensors(data_pipeline, onehot_label=False,
