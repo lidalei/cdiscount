@@ -7,7 +7,7 @@ from read_data import get_input_data_tensors
 
 
 class LinearClassifier(object):
-    def __init__(self, logdir='/tmp'):
+    def __init__(self, logdir='/tmp/linear_reg'):
         """
         Args:
              logdir: Path to the log dir.
@@ -389,7 +389,7 @@ class LogisticRegression(object):
         logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
         pred_prob = tf.nn.softmax(logits, dim=-1, name='pred_probability')
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
-        accuracy = tf.metrics.accuracy(labels_batch, pred_labels, name='accuracy')
+        accuracy, _ = tf.metrics.accuracy(labels_batch, pred_labels, name='accuracy')
 
         with tf.name_scope('train'):
             # multi-class classification
