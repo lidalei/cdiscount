@@ -433,20 +433,20 @@ class LogisticRegression(object):
             # optimize both softmax and transformation layer simultaneously.
 
             # Decayed learning rate.
-            # rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            # adap_learning_rate_w = tf.train.exponential_decay(self.init_learning_rate,
-            #                                                   rough_num_examples_processed,
-            #                                                   self.decay_steps,
-            #                                                   self.decay_rate,
-            #                                                   staircase=True,
-            #                                                   name='adap_learning_rate')
-            # tf.summary.scalar('learning_rate_w', adap_learning_rate_w)
+            rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
+            adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate,
+                                                            rough_num_examples_processed,
+                                                            self.decay_steps,
+                                                            self.decay_rate,
+                                                            staircase=True,
+                                                            name='adap_learning_rate')
+            tf.summary.scalar('learning_rate', adap_learning_rate)
             # GradientDescentOptimizer
             # optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
             # MomentumOptimizer
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
-
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate)
+            # optimizer = tf.train.AdamOptimizer(learning_rate=adap_learning_rate)
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate)
 
             train_op_w = optimizer.minimize(final_loss,
                                             global_step=global_step,
