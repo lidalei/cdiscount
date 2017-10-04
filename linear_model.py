@@ -447,10 +447,11 @@ class LogisticRegression(object):
             # optimizer = tf.train.AdamOptimizer(learning_rate=adap_learning_rate)
             optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate)
 
-            train_op_w = optimizer.minimize(final_loss,
-                                            global_step=global_step,
-                                            var_list=[weights, biases],
-                                            name='opt_softmax')
+            train_op_w = tf.no_op('train_op_w')
+            # train_op_w = optimizer.minimize(final_loss,
+            #                                 global_step=global_step,
+            #                                 var_list=[weights, biases],
+            #                                 name='opt_softmax')
 
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
             train_op = optimizer.minimize(final_loss, global_step=global_step,
@@ -669,11 +670,9 @@ class LogisticRegression(object):
                     current_train_op = self.train_op_w
                     # Don't use dropout nor update batch normalization.
                     current_train_feed_dict = val_feed_dict
-                    print('Optimizing the softmax layer only.')
                 else:
                     current_train_op = self.train_op
                     current_train_feed_dict = train_feed_dict
-                    print('Optimizing the full network.')
 
                 if step % 400 == 0:
                     _, summary, loss_val, global_step_val = sess.run(

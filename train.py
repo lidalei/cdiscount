@@ -71,7 +71,7 @@ def bias_variable(shape, name='biases'):
     return biases
 
 
-def create_conv_layer(input_val, filter_shape, strides, name):
+def create_conv_layer(input_tensor, filter_shape, strides, name):
     with tf.name_scope(name):
         weights = weight_variable(filter_shape, regularization=True)
         biases = bias_variable(filter_shape)
@@ -79,7 +79,7 @@ def create_conv_layer(input_val, filter_shape, strides, name):
         # When padding is 'SAME':
         # out_height = ceil(float(in_height) / float(strides[1]))
         # out_width = ceil(float(in_width) / float(strides[2]))
-        output = tf.add(tf.nn.conv2d(input_val, weights, strides, 'SAME'), biases)
+        output = tf.add(tf.nn.conv2d(input_tensor, weights, strides, 'SAME'), biases)
 
         return output
 
