@@ -355,6 +355,18 @@ class LogisticRegression(object):
                                    num_epochs=self.epochs,
                                    name_scope='input'))
 
+        if self.tr_data_fn is None:
+            tr_features_batch = tf.identity(raw_features_batch)
+        else:
+            tr_features_batch = self.tr_data_fn(raw_features_batch, **self.tr_data_paras)
+            # Get the pretrained variables just after creating the transformation!!!
+            # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
+            # This will cause an error while restoring the variables.
+            self.pretrained_var_list = self.graph.get_collection(
+                tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
+                tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
+            logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
+
         # Define num_classes logistic regression models parameters.
         if self.initial_weights is None:
             weights = tf.Variable(initial_value=tf.truncated_normal(
@@ -373,22 +385,9 @@ class LogisticRegression(object):
 
         tf.summary.histogram('model/biases', biases)
 
-        if self.tr_data_fn is None:
-            tr_features_batch = tf.identity(raw_features_batch)
-        else:
-            tr_features_batch = self.tr_data_fn(raw_features_batch, **self.tr_data_paras)
-            # Get the pretrained variables just after creating the transformation!!!
-            # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
-            # This will cause an error while restoring the variables.
-            self.pretrained_var_list = self.graph.get_collection(
-                tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
-                tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
-            logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
-
         logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
         pred_prob = tf.nn.softmax(logits, dim=-1, name='pred_probability')
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
-        accuracy, _ = tf.metrics.accuracy(labels_batch, pred_labels, name='accuracy')
 
         with tf.name_scope('train'):
             # multi-class classification
@@ -401,7 +400,6 @@ class LogisticRegression(object):
             #     name='x_entropy_per_example')
 
             loss = tf.reduce_mean(loss_per_example, name='x_entropy')
-
             tf.summary.scalar('loss/xentropy', loss)
 
             # Add regularization.
@@ -475,7 +473,6 @@ class LogisticRegression(object):
         tf.add_to_collection('loss', loss)
         tf.add_to_collection('pred_prob', pred_prob)
         tf.add_to_collection('pred_labels', pred_labels)
-        tf.add_to_collection('accuracy', accuracy)
 
         # To save global variables and savable objects, i.e., var_list is None.
         # Using rbf transform will also save centers and scaling factors.
@@ -681,7 +678,7 @@ class LogisticRegression(object):
                         feed_dict=current_train_feed_dict)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
-                    # Add training loss and accuracy summary.
+                    # Add training loss summary.
                     print('Step {}, training loss {:.6f}'.format(global_step_val, loss_val))
 
                     if step % 800 == 0:
