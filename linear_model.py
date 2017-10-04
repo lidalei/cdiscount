@@ -362,10 +362,11 @@ class LogisticRegression(object):
             # Get the pretrained variables just after creating the transformation!!!
             # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
             # This will cause an error while restoring the variables.
-            self.pretrained_var_list = self.graph.get_collection(
-                tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
-                tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
-            logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
+            if self.use_pretrain:
+                self.pretrained_var_list = self.graph.get_collection(
+                    tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
+                    tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
+                logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
         # Define num_classes logistic regression models parameters.
         if self.initial_weights is None:
@@ -668,9 +669,11 @@ class LogisticRegression(object):
                     current_train_op = self.train_op_w
                     # Don't use dropout nor update batch normalization.
                     current_train_feed_dict = val_feed_dict
+                    print('Optimizing the softmax layer only.')
                 else:
                     current_train_op = self.train_op
                     current_train_feed_dict = train_feed_dict
+                    print('Optimizing the full network.')
 
                 if step % 400 == 0:
                     _, summary, loss_val, global_step_val = sess.run(
