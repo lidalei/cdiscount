@@ -166,21 +166,23 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
 
 
 def transfer_learn_inception_v4(images, **kwargs):
+    # Disable batch normalization
     arg_scope = inception_v4_arg_scope(use_batch_norm=False)
     with slim.arg_scope(arg_scope):
         # Do not forget to cast images to float type.
         float_imgs = tf.cast(images, tf.float32)
         # dropout and batch normalization need to know the phase, training or validation (test).
         # Used for dropout and batch normalization. By default True.
-        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
-        tf.add_to_collection('phase_train_pl', phase_train_pl)
+        # phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+        # tf.add_to_collection('phase_train_pl', phase_train_pl)
 
         # Scale the imgs to [-1, +1]
         # TODO, other pre-process.
         scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
 
+        # Disable dropout
         _, end_points = inception_v4(
-            scaled_imgs, is_training=phase_train_pl, create_aux_logits=False)
+            scaled_imgs, is_training=False, create_aux_logits=False)
 
         return end_points['PreLogitsFlatten']
 
@@ -196,8 +198,8 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # Change Me!
-    tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 2048}
+    tr_data_fn = transfer_learn_inception_v4
+    tr_data_paras = {'reshape': True, 'size': 1536}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
