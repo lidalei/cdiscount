@@ -167,7 +167,7 @@ def transfer_learn_inception_resnet_v2(inputs, **kwargs):
 
 def transfer_learn_inception_v4(images, **kwargs):
     # Disable batch normalization
-    arg_scope = inception_v4_arg_scope(use_batch_norm=False)
+    arg_scope = inception_v4_arg_scope()
     with slim.arg_scope(arg_scope):
         # Do not forget to cast images to float type.
         float_imgs = tf.cast(images, tf.float32)
