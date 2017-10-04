@@ -433,27 +433,34 @@ class LogisticRegression(object):
 
             # Decayed learning rate.
             rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate,
+            adap_learning_rate_w = tf.train.exponential_decay(self.init_learning_rate,
+                                                              rough_num_examples_processed,
+                                                              self.decay_steps,
+                                                              self.decay_rate,
+                                                              staircase=True,
+                                                              name='adap_learning_rate')
+            tf.summary.scalar('learning_rate_softmax', adap_learning_rate_w)
+            # Optimize the softmax layer only when restoring from a pretrained checkpoint
+            # optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
+            # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
+            # optimizer = tf.train.AdamOptimizer(learning_rate=adap_learning_rate)
+            optimizer_w = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate_w)
+            train_op_w = optimizer_w.minimize(final_loss,
+                                              global_step=global_step,
+                                              var_list=[weights, biases],
+                                              name='opt_softmax')
+
+            # Decayed learning rate.
+            adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate / 10.0,
                                                             rough_num_examples_processed,
                                                             self.decay_steps,
                                                             self.decay_rate,
                                                             staircase=True,
                                                             name='adap_learning_rate')
-            tf.summary.scalar('learning_rate', adap_learning_rate)
-            # GradientDescentOptimizer
-            # optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
-            # MomentumOptimizer
-            # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
-            # optimizer = tf.train.AdamOptimizer(learning_rate=adap_learning_rate)
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate)
-
-            train_op_w = tf.no_op('train_op_w')
-            # train_op_w = optimizer.minimize(final_loss,
-            #                                 global_step=global_step,
-            #                                 var_list=[weights, biases],
-            #                                 name='opt_softmax')
-
+            tf.summary.scalar('learning_rate_full_net', adap_learning_rate)
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
+            # Note they cannot share the same optimizer.
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate)
             train_op = optimizer.minimize(final_loss, global_step=global_step,
                                           name='opt_full_network')
 
