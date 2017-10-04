@@ -181,8 +181,7 @@ def transfer_learn_inception_v4(images, **kwargs):
         scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
 
         # Disable dropout
-        _, end_points = inception_v4(
-            scaled_imgs, is_training=False, create_aux_logits=False)
+        _, end_points = inception_v4(scaled_imgs)
 
         return end_points['PreLogitsFlatten']
 

@@ -187,7 +187,6 @@ class LinearClassifier(object):
 
             phase_train_pls = tf.get_collection('phase_train_pl')
             phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
-            # TODO, change True to False
             val_feed_dict = {phase_train_pl: False} if phase_train_pl is not None else {}
 
         sess = tf.Session(graph=graph)
@@ -438,8 +437,8 @@ class LogisticRegression(object):
                                                               self.decay_steps,
                                                               self.decay_rate,
                                                               staircase=True,
-                                                              name='adap_learning_rate')
-            tf.summary.scalar('learning_rate_softmax', adap_learning_rate_w)
+                                                              name='adap_lr_softmax')
+            tf.summary.scalar('lr_softmax', adap_learning_rate_w)
             # Optimize the softmax layer only when restoring from a pretrained checkpoint
             # optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
@@ -456,13 +455,13 @@ class LogisticRegression(object):
                                                             self.decay_steps,
                                                             self.decay_rate,
                                                             staircase=True,
-                                                            name='adap_learning_rate')
-            tf.summary.scalar('learning_rate_full_net', adap_learning_rate)
+                                                            name='adap_lr_full_net')
+            tf.summary.scalar('lr_full_net', adap_learning_rate)
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
             # Note they cannot share the same optimizer.
             optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate)
             train_op = optimizer.minimize(final_loss, global_step=global_step,
-                                          name='opt_full_network')
+                                          name='opt_full_net')
 
         summary_op = tf.summary.merge_all()
         # summary_op = tf.constant(1.0)
@@ -649,7 +648,6 @@ class LogisticRegression(object):
             self.phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
 
             train_feed_dict = {self.phase_train_pl: True} if self.phase_train_pl is not None else {}
-            # TODO, change True to False
             val_feed_dict = {self.phase_train_pl: False} if self.phase_train_pl is not None else {}
 
         if self._check_graph_initialized():
