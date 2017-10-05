@@ -189,7 +189,7 @@ class LinearClassifier(object):
             phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
             val_feed_dict = {phase_train_pl: False} if phase_train_pl is not None else {}
 
-        sess = tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=True))
+        sess = tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False))
         # Initialize variables.
         sess.run(init_op)
         sess.run([norm_equ_1.initializer, norm_equ_2.initializer], feed_dict={
@@ -463,7 +463,7 @@ class LogisticRegression(object):
             tf.summary.scalar('lr_full_net', adap_lr)
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
             # Note they cannot share the same optimizer.
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=adap_lr)
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_lr)
             train_op = optimizer.minimize(final_loss,
                                           global_step=global_step,
                                           name='opt_full_net')
@@ -667,7 +667,7 @@ class LogisticRegression(object):
                                  save_model_secs=600, saver=self.saver,
                                  init_fn=self._load_pre_train_model())
 
-        with sv.managed_session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+        with sv.managed_session(config=tf.ConfigProto(log_device_placement=False)) as sess:
             logging.info("Entering training loop...")
             # Obtain the current training step. Continue training from a checkpoint.
             start_step = sess.run(self.global_step)
