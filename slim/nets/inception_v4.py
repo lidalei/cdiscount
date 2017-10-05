@@ -277,11 +277,10 @@ def inception_v4(inputs,
 
             # Final pooling and prediction
             with tf.variable_scope('Logits'):
-                # 8 x 8 x 1536
-                net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
-                                      scope='AvgPool_1a')
-                # 1 x 1 x 1536
-                # net = slim.dropout(net, dropout_keep_prob, scope='Dropout_1b')
+                # 41 x 41 x 96
+                net = slim.max_pool2d(net, [2, 2], stride=4, padding='VALID',
+                                      scope='MaxPool_1a')
+                # 10 x 10 x 96
                 net = slim.flatten(net, scope='PreLogitsFlatten')
                 end_points['PreLogitsFlatten'] = net
         return None, end_points

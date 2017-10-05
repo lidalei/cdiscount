@@ -173,8 +173,8 @@ def transfer_learn_inception_v4(images, **kwargs):
         float_imgs = tf.cast(images, tf.float32)
         # dropout and batch normalization need to know the phase, training or validation (test).
         # Used for dropout and batch normalization. By default True.
-        # phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
-        # tf.add_to_collection('phase_train_pl', phase_train_pl)
+        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+        tf.add_to_collection('phase_train_pl', phase_train_pl)
 
         # Scale the imgs to [-1, +1]
         # TODO, other pre-process.
@@ -182,8 +182,14 @@ def transfer_learn_inception_v4(images, **kwargs):
 
         # Disable dropout
         _, end_points = inception_v4(scaled_imgs)
+        net = end_points['PreLogitsFlatten']
 
-        return end_points['PreLogitsFlatten']
+        with tf.name_scope('Logits'):
+            keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.8, name='keep_prob'),
+                                lambda: tf.constant(1.0, name='keep_prob'))
+            net = tf.nn.dropout(net, keep_prob=keep_prob, name='Dropout')
+
+        return net
 
 
 def main(unused_argv):
@@ -198,7 +204,7 @@ def main(unused_argv):
 
     # Change Me!
     tr_data_fn = transfer_learn_inception_v4
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    tr_data_paras = {'reshape': True, 'size': 9600}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
