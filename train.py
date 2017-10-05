@@ -204,7 +204,7 @@ def main(unused_argv):
 
     # Change Me!
     tr_data_fn = transfer_learn_inception_v4
-    tr_data_paras = {'reshape': True, 'size': 9600}
+    tr_data_paras = {'reshape': True, 'size': 6912}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
