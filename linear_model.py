@@ -189,7 +189,7 @@ class LinearClassifier(object):
             phase_train_pl = phase_train_pls[0] if len(phase_train_pls) > 0 else None
             val_feed_dict = {phase_train_pl: False} if phase_train_pl is not None else {}
 
-        sess = tf.Session(graph=graph)
+        sess = tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=True))
         # Initialize variables.
         sess.run(init_op)
         sess.run([norm_equ_1.initializer, norm_equ_2.initializer], feed_dict={
@@ -362,6 +362,7 @@ class LogisticRegression(object):
             # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
             # This will cause an error while restoring the variables.
             if self.use_pretrain:
+                # OR tf.train.list_variables
                 self.pretrained_var_list = self.graph.get_collection(
                     tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
                     tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
@@ -427,42 +428,44 @@ class LogisticRegression(object):
             final_loss = tf.add(loss, reg_loss, name='final_loss')
 
         with tf.name_scope('optimization'):
-            # Optimize the softmax layer first and then
-            # optimize both softmax and transformation layer simultaneously.
-
-            # Decayed learning rate.
-            rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            # adap_learning_rate_w = tf.train.exponential_decay(self.init_learning_rate,
-            #                                                   rough_num_examples_processed,
-            #                                                   self.decay_steps,
-            #                                                   self.decay_rate,
-            #                                                   staircase=True,
-            #                                                   name='adap_lr_softmax')
-            # tf.summary.scalar('lr_softmax', adap_learning_rate_w)
-            # Optimize the softmax layer only when restoring from a pretrained checkpoint
-            # optimizer_w = tf.train.GradientDescentOptimizer(adap_learning_rate_w)
+            """
+            Optimize the softmax layer first and then 
+            optimize both softmax and transformation layer simultaneously.
+            Advanced optimizers might not be suitable because they use info of previous gradients.
             # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
             # optimizer = tf.train.AdamOptimizer(learning_rate=adap_learning_rate)
             # optimizer_w = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate_w)
-            # train_op_w = optimizer_w.minimize(final_loss,
-            #                                   global_step=global_step,
-            #                                   var_list=[weights, biases],
-            #                                   name='opt_softmax')
-
-            train_op_w = tf.no_op('train_op_w')
-
+            """
+            # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
             # Decayed learning rate.
-            adap_learning_rate = tf.train.exponential_decay(self.init_learning_rate / 10.0,
-                                                            rough_num_examples_processed,
-                                                            self.decay_steps,
-                                                            self.decay_rate,
-                                                            staircase=True,
-                                                            name='adap_lr_full_net')
-            tf.summary.scalar('lr_full_net', adap_learning_rate)
+            rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
+            adap_lr_w = tf.train.exponential_decay(self.init_learning_rate,
+                                                   rough_num_examples_processed,
+                                                   self.decay_steps,
+                                                   self.decay_rate,
+                                                   staircase=True,
+                                                   name='adap_lr_softmax')
+            tf.summary.scalar('lr_softmax', adap_lr_w)
+            # Optimize the softmax layer only when restoring from a pretrained checkpoint
+            optimizer_w = tf.train.GradientDescentOptimizer(adap_lr_w)
+            train_op_w = optimizer_w.minimize(final_loss,
+                                              global_step=global_step,
+                                              var_list=[weights, biases],
+                                              name='opt_softmax')
+
+            # Stage 2, tune the whole net.
+            adap_lr = tf.train.exponential_decay(self.init_learning_rate / 10.0,
+                                                 rough_num_examples_processed,
+                                                 self.decay_steps,
+                                                 self.decay_rate,
+                                                 staircase=True,
+                                                 name='adap_lr_full_net')
+            tf.summary.scalar('lr_full_net', adap_lr)
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
             # Note they cannot share the same optimizer.
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate)
-            train_op = optimizer.minimize(final_loss, global_step=global_step,
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate=adap_lr)
+            train_op = optimizer.minimize(final_loss,
+                                          global_step=global_step,
                                           name='opt_full_net')
 
         summary_op = tf.summary.merge_all()
@@ -664,7 +667,7 @@ class LogisticRegression(object):
                                  save_model_secs=600, saver=self.saver,
                                  init_fn=self._load_pre_train_model())
 
-        with sv.managed_session() as sess:
+        with sv.managed_session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             logging.info("Entering training loop...")
             # Obtain the current training step. Continue training from a checkpoint.
             start_step = sess.run(self.global_step)
