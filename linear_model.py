@@ -685,9 +685,23 @@ class LogisticRegression(object):
                     current_train_feed_dict = train_feed_dict
 
                 if step % 400 == 0:
+                    if step == 400:
+                        # Only record once
+                        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                        run_metadata = tf.RunMetadata()
+                    else:
+                        run_options = None
+                        run_metadata = None
+
                     _, summary, loss_val, global_step_val = sess.run(
                         [current_train_op, self.summary_op, self.loss, self.global_step],
-                        feed_dict=current_train_feed_dict)
+                        feed_dict=current_train_feed_dict,
+                        options=run_options, run_metadata=run_metadata)
+
+                    if run_metadata is not None:
+                        sv.summary_writer.add_run_metadata(run_metadata,
+                                                           'step_{}'.format(step),
+                                                           global_step=global_step_val)
                     # Add train summary.
                     sv.summary_computed(sess, summary, global_step=global_step_val)
                     # Add training loss summary.
