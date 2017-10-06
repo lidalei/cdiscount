@@ -142,52 +142,33 @@ def tr_data_conv_fn(input_tensor, **kwargs):
     return fc1
 
 
-def transfer_learn_inception_resnet_v2(inputs, **kwargs):
+def transfer_learn_inception_v4(images, **kwargs):
     """
-    Fine-tune the inception residual net
-    :param inputs: The features batch,
+    Fine-tune the inception net
+    :param images: The features batch,
         dimension [batch_size x height x width x channels]
     :return: The flattened just before the softmax layer.
     """
-    arg_scope = inception_resnet_v2_arg_scope()
-    with slim.arg_scope(arg_scope):
-        # Do not forget to cast images to float type.
-        input_val = tf.cast(inputs, tf.float32)
-        # dropout and batch normalization need to know the phase, training or validation (test).
-        # Used for dropout and batch normalization. By default True.
-        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
-        tf.add_to_collection('phase_train_pl', phase_train_pl)
-        # If output_stride is 8, create_aux_logits. If 16, not create_aux_logits.
-        _, end_points = inception_resnet_v2(
-            input_val, is_training=phase_train_pl, create_aux_logits=False)
-        tr_features = end_points['PreLogitsFlatten']
+    # dropout and batch normalization need to know the phase, training or validation (test).
+    # Used for dropout and batch normalization. By default True.
+    phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+    tf.add_to_collection('phase_train_pl', phase_train_pl)
+    # dropout layers
+    keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.8, name='keep_prob'),
+                        lambda: tf.constant(1.0, name='keep_prob'))
 
-        return tr_features
+    # Do not forget to cast images to float type.
+    float_imgs = tf.cast(images, tf.float32)
 
+    # Scale the imgs to [-1, +1]
+    # TODO, other pre-process.
+    scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
 
-def transfer_learn_inception_v4(images, **kwargs):
-    # Disable batch normalization
-    arg_scope = inception_v4_arg_scope()
-    with slim.arg_scope(arg_scope):
-        # Do not forget to cast images to float type.
-        float_imgs = tf.cast(images, tf.float32)
-        # dropout and batch normalization need to know the phase, training or validation (test).
-        # Used for dropout and batch normalization. By default True.
-        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
-        tf.add_to_collection('phase_train_pl', phase_train_pl)
-
-        # Scale the imgs to [-1, +1]
-        # TODO, other pre-process.
-        scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
-
+    with slim.arg_scope(inception_v4_arg_scope()):
         _, end_points = inception_v4(scaled_imgs)
         net = end_points['PreLogitsFlatten']
 
-        with tf.name_scope('Logits'):
-            keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.8, name='keep_prob'),
-                                lambda: tf.constant(1.0, name='keep_prob'))
-            net = tf.nn.dropout(net, keep_prob=keep_prob, name='Dropout')
-
+        net = tf.nn.dropout(net, keep_prob=keep_prob, name='Dropout')
         return net
 
 
