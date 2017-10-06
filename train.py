@@ -165,10 +165,10 @@ def transfer_learn_inception_v4(images, **kwargs):
     scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
 
     with slim.arg_scope(inception_v4_arg_scope()):
-        _, end_points = inception_v4(scaled_imgs)
+        _, end_points = inception_v4(scaled_imgs, is_training=phase_train_pl)
         net = end_points['PreLogitsFlatten']
-
         net = tf.nn.dropout(net, keep_prob=keep_prob, name='Dropout')
+
         return net
 
 
@@ -184,7 +184,7 @@ def main(unused_argv):
 
     # Change Me!
     tr_data_fn = transfer_learn_inception_v4
-    tr_data_paras = {'reshape': True, 'size': 6912}
+    tr_data_paras = {'reshape': True, 'size': 1536}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
-    flags.DEFINE_boolean('use_pretrain', False,
+    flags.DEFINE_boolean('use_pretrain', True,
                          'Whether to (partially) use pretrained model')
 
     flags.DEFINE_string('pretrained_model_dir', 'inception_v4_model/',
@@ -231,7 +231,7 @@ if __name__ == '__main__':
 
     flags.DEFINE_bool('start_new_model', True, 'Whether to start a new model.')
 
-    flags.DEFINE_string('logdir', '/tmp/inception_resnet_v2',
+    flags.DEFINE_string('logdir', '/tmp/inception_v4',
                         'The log dir to log events and checkpoints.')
 
     app.run()
