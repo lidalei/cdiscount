@@ -4,21 +4,7 @@
 
 sample_submission.csv
 
-train.tfrecord
-
-validation.tfrecord
-
-test.tfrecord
-
-validation.pickle
-
 inception_resnet_v2_model/inception_resnet_v2_2016_08_30.ckpt
-
-validation_all.tfrecord
-
-validation_minor.pickle
-
-train_val.tfrecord
 
 inception_v4_model/inception_v4.ckpt
 

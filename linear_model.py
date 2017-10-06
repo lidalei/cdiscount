@@ -391,7 +391,6 @@ class LogisticRegression(object):
         pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
 
         with tf.name_scope('train'):
-            # multi-class classification
             loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=labels_batch, logits=logits, name='x_entropy_per_example')
 

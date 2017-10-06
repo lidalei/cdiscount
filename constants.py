@@ -9,7 +9,7 @@ from tensorflow.python.lib.io.tf_record import TFRecordWriter
 NUM_TRAIN_IMAGES = 12371293
 NUM_CLASSES = 5270
 
-DATA_SET_FOLDER = '/Users/Sophie/Documents/cdiscount/'
+DATA_SET_FOLDER = '/Users/Sophie/Documents/cdiscount-data/'
 CATEGORY_NAMES_FILE_NAME = path_join(DATA_SET_FOLDER, 'category_names.csv')
 BSON_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train_example.bson')
 TRAIN_TF_DATA_FILE_NAME = path_join(DATA_SET_FOLDER, 'train.tfrecord')
