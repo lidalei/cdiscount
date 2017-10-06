@@ -113,7 +113,8 @@ class DataTFReader(object):
     def __init__(self, num_classes=NUM_CLASSES):
         self.num_classes = num_classes
 
-    def prepare_reader(self, filename_queue, batch_size=1024, onehot_label=False, name='examples'):
+    def prepare_reader(self, filename_queue, batch_size=1024, onehot_label=False,
+                       decode_image=True, name='examples'):
         reader = tf.TFRecordReader()
         feature_map = {
             '_id': tf.FixedLenFeature([], tf.int64),
@@ -134,10 +135,13 @@ class DataTFReader(object):
         features = tf.parse_example(serialized_examples, features=feature_map)
         img_ids = features['_id']
 
-        # Users must provide dtype if it is different from the data type of elems.
-        imgs = tf.map_fn(lambda img: tf.image.decode_jpeg(img, channels=IMAGE_CHANNELS), features['img'],
-                         dtype=tf.uint8)
-        imgs.set_shape([None, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS])
+        if decode_image:
+            # Users must provide dtype if it is different from the data type of elems.
+            imgs = tf.map_fn(lambda img: tf.image.decode_jpeg(img, channels=IMAGE_CHANNELS), features['img'],
+                             dtype=tf.uint8)
+            imgs.set_shape([None, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS])
+        else:
+            imgs = tf.ones([tf.shape(serialized_examples)[0]], dtype=tf.uint8)
 
         labels = features['category_id']
 
@@ -151,8 +155,8 @@ class DataTFReader(object):
             return img_ids, imgs, labels
 
 
-def get_input_data_tensors(data_pipeline, onehot_label=False,
-                           shuffle=False, num_epochs=1, name_scope='input'):
+def get_input_data_tensors(data_pipeline, onehot_label=False, shuffle=False, num_epochs=1,
+                           decode_image=True, name_scope='input'):
     reader = data_pipeline.reader
     data_pattern = data_pipeline.data_pattern
     batch_size = data_pipeline.batch_size
@@ -160,11 +164,13 @@ def get_input_data_tensors(data_pipeline, onehot_label=False,
 
     return _get_input_data_tensors(reader, data_pattern=data_pattern, batch_size=batch_size,
                                    num_threads=num_threads, onehot_label=onehot_label,
-                                   shuffle=shuffle, num_epochs=num_epochs, name_scope=name_scope)
+                                   shuffle=shuffle, num_epochs=num_epochs,
+                                   decode_image=decode_image, name_scope=name_scope)
 
 
 def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threads=1,
-                            onehot_label=False, shuffle=False, num_epochs=1, name_scope='input'):
+                            onehot_label=False, shuffle=False, num_epochs=1,
+                            decode_image=True, name_scope='input'):
     """Creates the section of the graph which reads the input data.
 
     Similar to the same-name function in train.py.
@@ -176,6 +182,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         onehot_label: Whether return onehot encoded label.
         shuffle: Boolean argument indicating whether shuffle examples.
         num_epochs: How many passed to go through the data files.
+        decode_image: Whether to decode image.
         name_scope: An identifier of this code.
 
     Returns:
@@ -185,6 +192,9 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
     Raises:
         IOError: If no files matching the given pattern were found.
     """
+    if (decode_image is not True) and (decode_image is not False):
+        raise ValueError('decode_image {} can either True or False.'.format(decode_image))
+
     # Adapted from namesake function in inference.py.
     with tf.name_scope(name_scope), tf.device('/cpu:0'):
         # Glob() can be replace with tf.train.match_filenames_once(), which is an operation.
@@ -194,8 +204,10 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         logging.info("Number of input files: {} within {}".format(len(files), name_scope))
         # Pass test data num_epochs.
         filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs,
-                                                        shuffle=shuffle, capacity=32)
-        examples = reader.prepare_reader(filename_queue, onehot_label=onehot_label)
+                                                        shuffle=shuffle, capacity=8)
+        examples = reader.prepare_reader(filename_queue,
+                                         onehot_label=onehot_label,
+                                         decode_image=decode_image)
 
         # In shuffle_batch_join,
         # capacity must be larger than min_after_dequeue and the amount larger
@@ -243,16 +255,27 @@ def main(unused_argv):
     The training procedure.
     :return:
     """
+    reader = DataTFReader(num_classes=NUM_CLASSES)
+    data_pipeline = DataPipeline(reader, FLAGS.train_data_pattern, 1024, 4)
+
     g = tf.Graph()
     with g.as_default() as g:
-        reader = DataTFReader(num_classes=NUM_CLASSES)
+        sum_labels_onehot = tf.Variable(tf.zeros([NUM_CLASSES]))
+
+        # Avoid decoding images
         id_batch, image_batch, label_batch = get_input_data_tensors(
-            DataPipeline(reader, FLAGS.train_data_pattern, 100, 1), shuffle=True)
+            data_pipeline, onehot_label=True, shuffle=False, decode_image=False)
+
+        sum_labels_onehot_op = sum_labels_onehot.assign_add(
+            tf.reduce_sum(tf.cast(label_batch, tf.float32), axis=0))
+
+        with tf.control_dependencies([sum_labels_onehot_op]):
+            accum_non_op = tf.no_op()
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
                            name='init_glo_loc_var')
 
-        summary_op = tf.summary.merge_all()
+        # summary_op = tf.summary.merge_all()
 
     with tf.Session(graph=g) as sess:
         sess.run(init_op)
@@ -265,11 +288,12 @@ def main(unused_argv):
 
         try:
             while not coord.should_stop():
-                id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
-                    [id_batch, image_batch, label_batch, summary_op])
-                logging.debug('id: {}, image: {}, label: {}'.format(
-                    id_batch_val, image_batch_val[0], label_batch_val))
-                summary_writer.add_summary(summary)
+                _ = sess.run(accum_non_op)
+                # id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
+                #     [id_batch, image_batch, label_batch, summary_op])
+                # logging.debug('id: {}, image: {}, label: {}'.format(
+                #     id_batch_val, image_batch_val[0], label_batch_val))
+                # summary_writer.add_summary(summary)
                 coord.request_stop()
         except tf.errors.OutOfRangeError:
             logging.info('One epoch done.')
@@ -279,6 +303,9 @@ def main(unused_argv):
 
         # Wait for threads to finish.
         coord.join(threads)
+
+        sum_labels_onehot_val = sess.run(sum_labels_onehot)
+        print('sum labels onehot: {}'.format(','.join(sum_labels_onehot_val.astype(np.str))))
 
         summary_writer.close()
 
@@ -300,4 +327,4 @@ if __name__ == '__main__':
     flags.DEFINE_string('train_val_ratios', '0.7,0.2',
                         'The percentage of train and validation partition.')
 
-    app.run(convert_bson_to_tfrecord)
+    app.run(main)
