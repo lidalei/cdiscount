@@ -10,8 +10,7 @@ How to run the program.
 """
 import csv
 import bson
-import matplotlib.pylab as plt
-import numpy as np
+import pickle
 import tensorflow as tf
 from tensorflow import gfile, logging, flags, app
 from tensorflow.python.lib.io.python_io import TFRecordWriter
@@ -305,7 +304,9 @@ def main(unused_argv):
         coord.join(threads)
 
         sum_labels_onehot_val = sess.run(sum_labels_onehot)
-        print('sum labels onehot: {}'.format(','.join(sum_labels_onehot_val.astype(np.str))))
+        # print('sum labels onehot: {}'.format(','.join(sum_labels_onehot_val.astype(np.str))))
+        with open('sum_labels_one_hot.pickle', mode='wb') as f:
+            pickle.dump(sum_labels_onehot_val, f)
 
         summary_writer.close()
 
