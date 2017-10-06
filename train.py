@@ -180,7 +180,6 @@ def transfer_learn_inception_v4(images, **kwargs):
         # TODO, other pre-process.
         scaled_imgs = tf.subtract(tf.scalar_mul(2.0 / 255.0, float_imgs), 1.0)
 
-        # Disable dropout
         _, end_points = inception_v4(scaled_imgs)
         net = end_points['PreLogitsFlatten']
 
@@ -217,7 +216,7 @@ def main(unused_argv):
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
-                init_learning_rate=0.001, decay_steps=NUM_TRAIN_IMAGES // 4,
+                init_learning_rate=0.01, decay_steps=NUM_TRAIN_IMAGES // 4,
                 use_pretrain=FLAGS.use_pretrain,
                 pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope=FLAGS.pretrained_scope)

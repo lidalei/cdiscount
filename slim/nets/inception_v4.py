@@ -280,7 +280,7 @@ def inception_v4(inputs,
                 # 41 x 41 x 192
                 net = slim.max_pool2d(net, [6, 6], stride=6, padding='VALID',
                                       scope='MaxPool_1a')
-                # 10 x 10 x 96
+                # 6 x 6 x 96
                 net = slim.flatten(net, scope='PreLogitsFlatten')
                 end_points['PreLogitsFlatten'] = net
         return None, end_points
