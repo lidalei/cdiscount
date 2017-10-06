@@ -699,7 +699,7 @@ class LogisticRegression(object):
                             val_data, val_labels = validation_set
                             # multi-label classification requires onehot-encoded labels
                             eye_mat = np.eye(num_classes)
-                            val_labels = eye_mat[val_labels]
+                            val_labels_onthot = eye_mat[val_labels]
 
                             # Compute validation loss.
                             num_val_images = len(val_labels)
@@ -717,7 +717,7 @@ class LogisticRegression(object):
                                         [self.loss, self.pred_labels], feed_dict={
                                             **val_feed_dict,
                                             self.raw_features_batch: val_data[start_ind:end_ind],
-                                            self.labels_batch: val_labels[start_ind:end_ind]})
+                                            self.labels_batch: val_labels_onthot[start_ind:end_ind]})
 
                                     val_pred_labels.extend(ith_pred_labels)
                                 else:
@@ -725,7 +725,7 @@ class LogisticRegression(object):
                                         self.loss, feed_dict={
                                             **val_feed_dict,
                                             self.raw_features_batch: val_data[start_ind:end_ind],
-                                            self.labels_batch: val_labels[start_ind:end_ind]})
+                                            self.labels_batch: val_labels_onthot[start_ind:end_ind]})
 
                                 val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
 
