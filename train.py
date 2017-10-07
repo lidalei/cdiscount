@@ -84,16 +84,20 @@ def create_conv_layer(input_tensor, filter_shape, strides, name):
         return output
 
 
-def tr_data_conv_fn(input_tensor, **kwargs):
-    # Do not forget to cast images to float type.
-    value = tf.cast(input_tensor, tf.float32)
+def tr_data_conv_fn(images, **kwargs):
+    # Cast images to float type.
+    value = tf.cast(images, tf.float32)
+
+    # Scale the imgs to [-1, +1]
+    scaled_value = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
+
     all_strides = []
     # Convolutional layer 1.
     filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=IMAGE_CHANNELS, out_channels=64)
+                                    in_channels=IMAGE_CHANNELS, out_channels=128)
     conv1_strides = [1, 2, 2, 1]
     all_strides.append(conv1_strides)
-    conv1 = create_conv_layer(value, filter1_shape, conv1_strides, name='conv1')
+    conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, name='conv1')
 
     pool1_strides = [1, 2, 2, 1]
     all_strides.append(pool1_strides)
@@ -104,7 +108,7 @@ def tr_data_conv_fn(input_tensor, **kwargs):
 
     # Convolutional layer 2.
     filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=64, out_channels=128)
+                                    in_channels=128, out_channels=64)
     conv2_strides = [1, 2, 2, 1]
     all_strides.append(conv2_strides)
     conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, name='conv2')
@@ -182,9 +186,9 @@ def main(unused_argv):
     with open(FLAGS.validation_data_file, 'rb') as pickle_f:
         val_data, val_labels = pickle_load(pickle_f)
 
-    # Change Me!
-    tr_data_fn = transfer_learn_inception_v4
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    # TODO, Change Me!
+    tr_data_fn = tr_data_conv_fn
+    tr_data_paras = {'reshape': True, 'size': 2048}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
@@ -197,7 +201,7 @@ def main(unused_argv):
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
-                init_learning_rate=0.01, decay_steps=NUM_TRAIN_IMAGES // 4,
+                init_learning_rate=0.01, decay_steps=NUM_TRAIN_IMAGES // 2,
                 use_pretrain=FLAGS.use_pretrain,
                 pretrained_model_dir=FLAGS.pretrained_model_dir,
                 pretrained_scope=FLAGS.pretrained_scope)
@@ -220,7 +224,7 @@ if __name__ == '__main__':
     flags.DEFINE_string('validation_data_file', VALIDATION_PICKLE_DATA_FILE_NAME,
                         'The pickle file which stores the validation set.')
 
-    flags.DEFINE_boolean('use_pretrain', True,
+    flags.DEFINE_boolean('use_pretrain', False,
                          'Whether to (partially) use pretrained model')
 
     flags.DEFINE_string('pretrained_model_dir', 'inception_v4_model/',
