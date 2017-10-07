@@ -94,8 +94,8 @@ def tr_data_conv_fn(images, **kwargs):
     all_strides = []
     # Convolutional layer 1.
     filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=IMAGE_CHANNELS, out_channels=256)
-    conv1_strides = [1, 2, 2, 1]
+                                    in_channels=IMAGE_CHANNELS, out_channels=64)
+    conv1_strides = [1, 1, 1, 1]
     all_strides.append(conv1_strides)
     conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, name='conv1')
 
@@ -108,12 +108,12 @@ def tr_data_conv_fn(images, **kwargs):
 
     # Convolutional layer 2.
     filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=256, out_channels=128)
-    conv2_strides = [1, 2, 2, 1]
+                                    in_channels=64, out_channels=128)
+    conv2_strides = [1, 1, 1, 1]
     all_strides.append(conv2_strides)
     conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, name='conv2')
 
-    pool2_strides = [1, 3, 3, 1]
+    pool2_strides = [1, 2, 2, 1]
     all_strides.append(pool2_strides)
     pool2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=pool2_strides,
                            padding='SAME', name='max_pool2')
