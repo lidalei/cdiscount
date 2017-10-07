@@ -9,3 +9,5 @@ inception_resnet_v2_model/inception_resnet_v2_2016_08_30.ckpt
 inception_v4_model/inception_v4.ckpt
 
 sum_labels_one_hot.pickle
+
+resnet_v1_152/resnet_v1_152.ckpt

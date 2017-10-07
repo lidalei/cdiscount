@@ -94,7 +94,7 @@ def tr_data_conv_fn(images, **kwargs):
     all_strides = []
     # Convolutional layer 1.
     filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=IMAGE_CHANNELS, out_channels=128)
+                                    in_channels=IMAGE_CHANNELS, out_channels=256)
     conv1_strides = [1, 2, 2, 1]
     all_strides.append(conv1_strides)
     conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, name='conv1')
@@ -108,7 +108,7 @@ def tr_data_conv_fn(images, **kwargs):
 
     # Convolutional layer 2.
     filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=128, out_channels=64)
+                                    in_channels=256, out_channels=128)
     conv2_strides = [1, 2, 2, 1]
     all_strides.append(conv2_strides)
     conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, name='conv2')
@@ -136,7 +136,7 @@ def tr_data_conv_fn(images, **kwargs):
     # Flatten the feature maps
     output = tf.reshape(activation2, [-1, conv_out_size])
 
-    out_size = 2048
+    out_size = 4096
     with tf.name_scope('fc1'):
         weights = weight_variable([conv_out_size, out_size], regularization=True)
         biases = bias_variable([out_size])
