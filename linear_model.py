@@ -437,17 +437,16 @@ class LogisticRegression(object):
             # optimizer_w = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate_w)
             """
             # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
-            # Optimize the softmax layer only when restoring from a pretrained checkpoint
-            optimizer_w = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate)
+            optimizer_w = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
             train_op_w = optimizer_w.minimize(final_loss,
                                               global_step=global_step,
                                               var_list=[weights, biases],
                                               name='opt_softmax')
 
             # Stage 2, tune the whole net.
-            # Fine tuning the transformation and softmax layer with RMSPropOptimizer
-            # Note they cannot share the same optimizer.
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate / 10.0)
+            # Fine tuning the transformation and softmax layer with AdamOptimizer
+            # Note sharing the same optimizer is not recommended.
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate / 10.0)
             train_op = optimizer.minimize(final_loss,
                                           global_step=global_step,
                                           name='opt_full_net')
