@@ -437,33 +437,17 @@ class LogisticRegression(object):
             # optimizer_w = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate_w)
             """
             # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
-            # Decayed learning rate.
-            rough_num_examples_processed = tf.multiply(global_step, self.batch_size)
-            adap_lr_w = tf.train.exponential_decay(self.init_learning_rate,
-                                                   rough_num_examples_processed,
-                                                   self.decay_steps,
-                                                   self.decay_rate,
-                                                   staircase=True,
-                                                   name='adap_lr_softmax')
-            tf.summary.scalar('lr_softmax', adap_lr_w)
             # Optimize the softmax layer only when restoring from a pretrained checkpoint
-            optimizer_w = tf.train.GradientDescentOptimizer(adap_lr_w)
+            optimizer_w = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate)
             train_op_w = optimizer_w.minimize(final_loss,
                                               global_step=global_step,
                                               var_list=[weights, biases],
                                               name='opt_softmax')
 
             # Stage 2, tune the whole net.
-            adap_lr = tf.train.exponential_decay(self.init_learning_rate / 10.0,
-                                                 rough_num_examples_processed,
-                                                 self.decay_steps,
-                                                 self.decay_rate,
-                                                 staircase=True,
-                                                 name='adap_lr_full_net')
-            tf.summary.scalar('lr_full_net', adap_lr)
             # Fine tuning the transformation and softmax layer with RMSPropOptimizer
             # Note they cannot share the same optimizer.
-            optimizer = tf.train.RMSPropOptimizer(learning_rate=adap_lr)
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate / 10.0)
             train_op = optimizer.minimize(final_loss,
                                           global_step=global_step,
                                           name='opt_full_net')
