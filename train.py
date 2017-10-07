@@ -136,7 +136,7 @@ def tr_data_conv_fn(images, **kwargs):
     # Flatten the feature maps
     output = tf.reshape(activation2, [-1, conv_out_size])
 
-    out_size = 4096
+    out_size = 2048
     with tf.name_scope('fc1'):
         weights = weight_variable([conv_out_size, out_size], regularization=True)
         biases = bias_variable([out_size])
@@ -188,7 +188,7 @@ def main(unused_argv):
 
     # TODO, Change Me!
     tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 4096}
+    tr_data_paras = {'reshape': True, 'size': 2048}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
