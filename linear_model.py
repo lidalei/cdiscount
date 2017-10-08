@@ -233,7 +233,7 @@ class LinearClassifier(object):
             # Compute validation loss.
             num_validate_videos = validate_data.shape[0]
             split_indices = np.linspace(0, num_validate_videos + 1,
-                                        num=max(num_validate_videos // batch_size, 2),
+                                        num=max(num_validate_videos // batch_size + 1, 2),
                                         dtype=np.int32)
             loss_vals = []
             for i in range(len(split_indices) - 1):
@@ -774,7 +774,7 @@ class LogisticRegression(object):
                         if num_val_images > 0:
                             # Compute validation loss.
                             split_indices = np.linspace(0, num_val_images + 1,
-                                                        num=max(num_val_images // self.batch_size, 2),
+                                                        num=max(num_val_images // self.batch_size + 1, 2),
                                                         dtype=np.int32)
 
                             val_loss_vals, val_pred_labels = [], []
