@@ -127,18 +127,17 @@ class LinearClassifier(object):
 
             with tf.name_scope('batch_increment'):
                 tr_features_batch_tr = tf.matrix_transpose(tr_features_batch, name='X_Tr')
-                float_labels_batch = tf.cast(labels_batch, tf.float32)
                 batch_norm_equ_1 = tf.matmul(tr_features_batch_tr, tr_features_batch,
                                              name='batch_norm_equ_1')
                 # batch_norm_equ_1 = tf.add_n(tf.map_fn(lambda x: tf.einsum('i,j->ij', x, x),
                 #                                       transformed_features_batch_tr), name='X_Tr_X')
-                batch_norm_equ_2 = tf.matmul(tr_features_batch_tr, float_labels_batch,
+                batch_norm_equ_2 = tf.matmul(tr_features_batch_tr, labels_batch,
                                              name='batch_norm_equ_2')
                 batch_example_count = tf.cast(tf.shape(tr_features_batch)[0], tf.float32,
                                               name='batch_example_count')
                 batch_features_sum = tf.reduce_sum(tr_features_batch, axis=0,
                                                    name='batch_features_sum')
-                batch_labels_sum = tf.reduce_sum(float_labels_batch, axis=0,
+                batch_labels_sum = tf.reduce_sum(labels_batch, axis=0,
                                                  name='batch_labels_sum')
 
             with tf.name_scope('update_ops'):
@@ -178,7 +177,7 @@ class LinearClassifier(object):
                 predictions = tf.matmul(tr_features_batch, weights) + biases
 
                 squared_loss = tf.reduce_sum(
-                    tf.squared_difference(predictions, float_labels_batch), name='squared_loss')
+                    tf.squared_difference(predictions, labels_batch), name='squared_loss')
                 # pred_labels = tf.greater_equal(predictions, 0.0, name='pred_labels')
 
             summary_op = tf.summary.merge_all()
@@ -249,7 +248,7 @@ class LinearClassifier(object):
                 ith_loss_val = sess.run(squared_loss,
                                         feed_dict={
                                             raw_features_batch: par_val_data,
-                                            float_labels_batch: par_val_labels,
+                                            labels_batch: par_val_labels,
                                             weights: weights_val,
                                             biases: biases_val})
 
@@ -387,7 +386,7 @@ class LogisticRegression(object):
         global_step = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='global_step')
 
         # Define the last classification layer, softmax or multi-label classification.
-        with tf.variable_scope('classification', reuse=None):
+        with tf.variable_scope('Classification', reuse=None):
             if self.initial_weights is None:
                 weights = tf.get_variable('weights', shape=[self.feature_size, self.num_classes],
                                           initializer=tf.truncated_normal_initializer(
@@ -405,21 +404,20 @@ class LogisticRegression(object):
                 biases = tf.get_variable('biases', shape=[self.num_classes],
                                          initializer=self.initial_biases)
 
-        with tf.name_scope('optimization'):
-            # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
-            optimizer_w = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate,
-                                                    name='opt_softmax')
+        # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
+        optimizer_w = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate,
+                                                name='opt_softmax')
 
-            # Stage 2, tune the whole net.
-            # Fine tuning the transformation and softmax layer with AdamOptimizer
-            # Note sharing the same optimizer is not recommended, for they use info of previous gradients.
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate / 10.0,
-                                               name='opt_full_net')
+        # Stage 2, tune the whole net.
+        # Fine tuning the transformation and softmax layer with AdamOptimizer
+        # Note sharing the same optimizer is not recommended, for they use info of previous gradients.
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate / 10.0,
+                                           name='opt_full_net')
 
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
             self.train_data_pipeline, onehot_label=True,
-            shuffle=True, num_epochs=self.epochs, name_scope='input')
+            shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Loss'):
             # Split the training batch into smaller mini-batches.
@@ -439,9 +437,9 @@ class LogisticRegression(object):
                                                     **{**self.tr_data_paras,
                                                        'reuse': True if i > 0 else None})
 
-                i_logits = tf.add(tf.matmul(i_tr_features, weights), biases, name='logits_{}'.format(i))
-                i_pred_prob = tf.nn.softmax(i_logits, dim=-1, name='pred_probability')
-                i_pred_labels = tf.argmax(i_logits, axis=-1, name='pred_labels')
+                i_logits = tf.add(tf.matmul(i_tr_features, weights), biases, name='logits_{}'.format(i+1))
+                i_pred_prob = tf.nn.softmax(i_logits, dim=-1, name='pred_probability_{}'.format(i+1))
+                i_pred_labels = tf.argmax(i_logits, axis=-1, name='pred_labels_{}'.format(i+1))
 
                 tower_pred_prob.append(i_pred_prob)
                 tower_pred_labels.append(i_pred_labels)
@@ -450,14 +448,18 @@ class LogisticRegression(object):
                     labels=labels_batch, logits=logits, name='x_entropy_per_example')
                 """
                 # multi-label classification
+                i_logistic_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=labels_batch_splits[i],
+                    logits=i_logits, name='logistic_loss_{}'.format(i+1))
                 i_loss_per_example = tf.reduce_sum(
-                    tf.nn.sigmoid_cross_entropy_with_logits(
-                        labels=tf.cast(labels_batch_splits[i], tf.float32), logits=i_logits),
-                    axis=-1, name='x_entropy_per_example_{}'.format(i))
-                i_loss = tf.reduce_mean(i_loss_per_example, name='x_entropy_{}'.format(i))
+                    i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i+1))
+                i_loss = tf.reduce_mean(i_loss_per_example, name='mean_loss_{}'.format(i+1))
 
                 tower_losses.append(tf.expand_dims(i_loss, 0))
-                tower_gradients_w.append(optimizer_w.compute_gradients(i_loss, var_list=[weights, biases]))
+                # compute_gradients only return the gradients over given var_list.
+                if self.use_pretrain:
+                    tower_gradients_w.append(optimizer_w.compute_gradients(
+                        i_loss, var_list=[weights, biases]))
                 tower_gradients.append(optimizer.compute_gradients(i_loss))
 
             loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
@@ -497,12 +499,15 @@ class LogisticRegression(object):
             else:
                 reg_loss = tf.constant(0.0, name='zero_reg_loss')
 
-        with tf.name_scope('Train'):
+        with tf.variable_scope('Train'):
             # TODO, Compute reg_loss in terms of variables, _w and full network
-            train_op_w = optimizer_w.apply_gradients(self.average_gradients(tower_gradients_w),
-                                                     global_step=global_step)
-            train_op = optimizer.apply_gradients(self.average_gradients(tower_gradients),
-                                                 global_step=global_step)
+            if self.use_pretrain:
+                train_op_w = optimizer_w.apply_gradients(
+                    self.average_gradients(tower_gradients_w), global_step=global_step)
+            else:
+                train_op_w = tf.no_op('NO_TRAIN_OP_W')
+            train_op = optimizer.apply_gradients(
+                self.average_gradients(tower_gradients), global_step=global_step)
 
         # Add summary to trainable variables.
         with tf.name_scope('Summary'):
