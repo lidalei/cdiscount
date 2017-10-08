@@ -253,14 +253,12 @@ def inception_v4_base(inputs, final_endpoint='Mixed_7d'):
 
 
 def inception_v4(inputs, is_training=True,
-                 dropout_keep_prob=0.8,
                  reuse=None,
                  scope='InceptionV4'):
     """Creates the Inception V4 model.
       Args:
         inputs: a 4-D tensor of size [batch_size, height, width, 3].
         is_training: whether is training or not.
-        dropout_keep_prob: float, the fraction to keep before final layer.
         reuse: whether or not the network and its variables should be reused. To be
           able to reuse 'scope' must be given.
         scope: Optional variable_scope.
