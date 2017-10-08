@@ -417,7 +417,7 @@ class LogisticRegression(object):
 
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
-            self.train_data_pipeline, onehot_label=True,
+            self.train_data_pipeline, onehot_label=False,
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Split'), tf.device('/cpu:0'):
@@ -453,9 +453,9 @@ class LogisticRegression(object):
 
                 tower_pred_prob.append(i_pred_prob)
                 tower_pred_labels.append(i_pred_labels)
-                """
-                loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                    labels=labels_batch, logits=logits, name='x_entropy_per_example')
+
+                i_loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=labels_batch_splits[i], logits=i_logits, name='x_entropy_per_example')
                 """
                 # multi-label classification
                 i_logistic_loss = tf.nn.sigmoid_cross_entropy_with_logits(
@@ -463,6 +463,7 @@ class LogisticRegression(object):
                     logits=i_logits, name='logistic_loss_{}'.format(i+1))
                 i_loss_per_example = tf.reduce_sum(
                     i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i+1))
+                """
                 i_loss = tf.reduce_mean(i_loss_per_example, name='mean_loss_{}'.format(i+1))
 
                 tower_losses.append(tf.expand_dims(i_loss, 0))
