@@ -368,6 +368,13 @@ class LogisticRegression(object):
                     tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
                 logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
+                for var in self.pretrained_var_list:
+                    if len(var.shape) == 0:
+                        # Scalar
+                        tf.summary.scalar(var.op.name, var)
+                    else:
+                        tf.summary.histogram(var.op.name, var)
+
         # Define num_classes logistic regression models parameters.
         if self.initial_weights is None:
             weights = tf.Variable(initial_value=tf.truncated_normal(
