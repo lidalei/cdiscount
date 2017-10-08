@@ -124,7 +124,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
         output = tf.reshape(activation2, [-1, conv_out_size])
 
         out_size = 1536
-        with tf.variable_scope('fc'):
+        with tf.variable_scope('fc'), tf.device('/cpu:0'):
             weights = tf.get_variable(
                 'weights', shape=[conv_out_size, out_size],
                 initializer=tf.truncated_normal_initializer(stddev=1.0 / np.sqrt(conv_out_size)),

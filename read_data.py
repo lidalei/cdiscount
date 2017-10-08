@@ -203,7 +203,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
     if not files:
         raise IOError("Unable to find input files. data_pattern='{}'".format(data_pattern))
     logging.info("Number of input files: {} within {}".format(len(files), name_scope))
-    
+
     with tf.name_scope(name_scope), tf.device('/cpu:0'):
         # Pass test data num_epochs.
         filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs,
