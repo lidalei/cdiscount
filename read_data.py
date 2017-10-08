@@ -147,8 +147,8 @@ class DataTFReader(object):
 
         if onehot_label:
             one_hot_labels = tf.one_hot(labels, depth=self.num_classes,
-                                        on_value=1.0, off_value=0.0,
-                                        dtype=tf.float32, axis=-1)
+                                        on_value=1, off_value=0,
+                                        dtype=tf.int32, axis=-1)
 
             return img_ids, imgs, one_hot_labels
         else:
@@ -157,9 +157,6 @@ class DataTFReader(object):
 
 def get_input_data_tensors(data_pipeline, onehot_label=False, shuffle=False, num_epochs=1,
                            decode_image=True, name_scope='input'):
-    """
-    If onehot_label is True, one-hot encode the labels into float32 type. False, int32 type.
-    """
     reader = data_pipeline.reader
     data_pattern = data_pipeline.data_pattern
     batch_size = data_pipeline.batch_size

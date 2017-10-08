@@ -127,17 +127,18 @@ class LinearClassifier(object):
 
             with tf.name_scope('batch_increment'):
                 tr_features_batch_tr = tf.matrix_transpose(tr_features_batch, name='X_Tr')
+                float_labels_batch = tf.to_float(labels_batch)
                 batch_norm_equ_1 = tf.matmul(tr_features_batch_tr, tr_features_batch,
                                              name='batch_norm_equ_1')
                 # batch_norm_equ_1 = tf.add_n(tf.map_fn(lambda x: tf.einsum('i,j->ij', x, x),
                 #                                       transformed_features_batch_tr), name='X_Tr_X')
-                batch_norm_equ_2 = tf.matmul(tr_features_batch_tr, labels_batch,
+                batch_norm_equ_2 = tf.matmul(tr_features_batch_tr, float_labels_batch,
                                              name='batch_norm_equ_2')
                 batch_example_count = tf.cast(tf.shape(tr_features_batch)[0], tf.float32,
                                               name='batch_example_count')
                 batch_features_sum = tf.reduce_sum(tr_features_batch, axis=0,
                                                    name='batch_features_sum')
-                batch_labels_sum = tf.reduce_sum(labels_batch, axis=0,
+                batch_labels_sum = tf.reduce_sum(float_labels_batch, axis=0,
                                                  name='batch_labels_sum')
 
             with tf.name_scope('update_ops'):
@@ -177,7 +178,7 @@ class LinearClassifier(object):
                 predictions = tf.matmul(tr_features_batch, weights) + biases
 
                 squared_loss = tf.reduce_sum(
-                    tf.squared_difference(predictions, labels_batch), name='squared_loss')
+                    tf.squared_difference(predictions, float_labels_batch), name='squared_loss')
                 # pred_labels = tf.greater_equal(predictions, 0.0, name='pred_labels')
 
             summary_op = tf.summary.merge_all()
@@ -248,7 +249,7 @@ class LinearClassifier(object):
                 ith_loss_val = sess.run(squared_loss,
                                         feed_dict={
                                             raw_features_batch: par_val_data,
-                                            labels_batch: par_val_labels,
+                                            float_labels_batch: par_val_labels,
                                             weights: weights_val,
                                             biases: biases_val})
 
@@ -458,7 +459,7 @@ class LogisticRegression(object):
                 """
                 # multi-label classification
                 i_logistic_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-                    labels=labels_batch_splits[i],
+                    labels=tf.to_float(labels_batch_splits[i]),
                     logits=i_logits, name='logistic_loss_{}'.format(i+1))
                 i_loss_per_example = tf.reduce_sum(
                     i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i+1))
