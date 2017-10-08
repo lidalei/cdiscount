@@ -68,13 +68,13 @@ def create_conv_layer(images, filter_shape, strides, name, regularization=True):
 def tr_data_conv_fn(images, regularization=True, **kwargs):
     reuse = True if 'reuse' in kwargs and kwargs['reuse'] is True else None
 
-    with tf.variable_scope('ConvNet', values=[images], reuse=reuse):
+    with tf.variable_scope('Pre-process', values=[images], reuse=reuse), tf.device('/cpu:0'):
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
-
         # Scale the imgs to [-1, +1]
         scaled_value = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
 
+    with tf.variable_scope('ConvNet', values=[scaled_value], reuse=reuse):
         all_strides = []
         # Convolutional layer 1.
         filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,

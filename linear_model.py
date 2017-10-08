@@ -419,12 +419,13 @@ class LogisticRegression(object):
             self.train_data_pipeline, onehot_label=True,
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
-        with tf.name_scope('Loss'):
-            # Split the training batch into smaller mini-batches.
+        with tf.name_scope('Split'), tf.device('/cpu:0'):
             num_parallelism = 4
             raw_features_batch_splits = tf.split(raw_features_batch, num_parallelism, axis=0)
             labels_batch_splits = tf.split(labels_batch, num_parallelism, axis=0)
 
+        with tf.name_scope('Loss'):
+            # Split the training batch into smaller mini-batches.
             tower_losses = []
             tower_pred_prob, tower_pred_labels = [], []
             tower_gradients_w, tower_gradients = [], []
@@ -436,6 +437,14 @@ class LogisticRegression(object):
                     i_tr_features = self.tr_data_fn(raw_features_batch_splits[i],
                                                     **{**self.tr_data_paras,
                                                        'reuse': True if i > 0 else None})
+                    # Get the pretrained variables just after creating the transformation!!!
+                    # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
+                    # This will cause an error while restoring the variables.
+                    if self.use_pretrain is True and self.pretrained_var_list is None:
+                        self.pretrained_var_list = self.graph.get_collection(
+                            tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
+                            tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
+                        logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
                 i_logits = tf.add(tf.matmul(i_tr_features, weights), biases, name='logits_{}'.format(i+1))
                 i_pred_prob = tf.nn.softmax(i_logits, dim=-1, name='pred_probability_{}'.format(i+1))
@@ -465,16 +474,6 @@ class LogisticRegression(object):
             loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
             pred_prob = tf.concat(tower_pred_prob, 0, name='pred_probability')
             pred_labels = tf.concat(tower_pred_labels, 0, name='pred_labels')
-
-            # Get the pretrained variables just after creating the transformation!!!
-            # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
-            # This will cause an error while restoring the variables.
-            if self.use_pretrain is True and self.pretrained_var_list is None:
-                # OR tf.train.list_variables
-                self.pretrained_var_list = self.graph.get_collection(
-                    tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
-                    tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
-                logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
         with tf.name_scope('Regularization'):
             # Add regularization.
