@@ -198,13 +198,13 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
     if (decode_image is not True) and (decode_image is not False):
         raise ValueError('decode_image {} can either True or False.'.format(decode_image))
 
-    # Adapted from namesake function in inference.py.
+    # Glob() can be replace with tf.train.match_filenames_once(), which is an operation.
+    files = gfile.Glob(data_pattern)
+    if not files:
+        raise IOError("Unable to find input files. data_pattern='{}'".format(data_pattern))
+    logging.info("Number of input files: {} within {}".format(len(files), name_scope))
+    
     with tf.name_scope(name_scope), tf.device('/cpu:0'):
-        # Glob() can be replace with tf.train.match_filenames_once(), which is an operation.
-        files = gfile.Glob(data_pattern)
-        if not files:
-            raise IOError("Unable to find input files. data_pattern='{}'".format(data_pattern))
-        logging.info("Number of input files: {} within {}".format(len(files), name_scope))
         # Pass test data num_epochs.
         filename_queue = tf.train.string_input_producer(files, num_epochs=num_epochs,
                                                         shuffle=shuffle, capacity=8)
@@ -218,7 +218,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         #   min_after_dequeue + (num_threads + a small safety margin) * batch_size
         # allow_smaller_final_batch False to ensure there must be batch_size examples returned.
         if shuffle:
-            capacity = (num_threads + 3) * batch_size
+            capacity = (num_threads + 2) * batch_size
             id_batch, image_batch, category_batch = (
                 tf.train.shuffle_batch(examples, batch_size,
                                        capacity, min_after_dequeue=batch_size,
@@ -226,7 +226,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
                                        allow_smaller_final_batch=False,
                                        enqueue_many=True))
         else:
-            capacity = (num_threads + 3) * batch_size
+            capacity = (num_threads + 2) * batch_size
             id_batch, image_batch, category_batch = (
                 tf.train.batch(examples, batch_size, num_threads=num_threads,
                                capacity=capacity,
