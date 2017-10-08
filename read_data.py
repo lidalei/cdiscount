@@ -12,6 +12,7 @@ import csv
 import bson
 import pickle
 import tensorflow as tf
+import numpy as np
 from tensorflow import gfile, logging, flags, app
 from tensorflow.python.lib.io.python_io import TFRecordWriter
 from constants import NUM_CLASSES, CATEGORY_NAMES_FILE_NAME, BSON_DATA_FILE_NAME, DataPipeline
@@ -146,8 +147,8 @@ class DataTFReader(object):
 
         if onehot_label:
             one_hot_labels = tf.one_hot(labels, depth=self.num_classes,
-                                        on_value=1, off_value=0,
-                                        dtype=tf.int32, axis=-1)
+                                        on_value=1.0, off_value=0.0,
+                                        dtype=tf.float32, axis=-1)
 
             return img_ids, imgs, one_hot_labels
         else:
@@ -156,6 +157,9 @@ class DataTFReader(object):
 
 def get_input_data_tensors(data_pipeline, onehot_label=False, shuffle=False, num_epochs=1,
                            decode_image=True, name_scope='input'):
+    """
+    If onehot_label is True, one-hot encode the labels into float32 type. False, int32 type.
+    """
     reader = data_pipeline.reader
     data_pattern = data_pipeline.data_pattern
     batch_size = data_pipeline.batch_size
@@ -232,7 +236,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         return id_batch, image_batch, category_batch
 
 
-def convert_bson_to_tfrecord(unused_argv):
+def convert_bson_to_tfrecord(_):
     # Parse the mappings from category_id to category names in three levels.
     category = Category(FLAGS.category_csv_path)
     print('{}: {}'.format(1000012776, category.get_name(1000012776)))
@@ -250,7 +254,7 @@ def convert_bson_to_tfrecord(unused_argv):
                                     ratios=ratios)
 
 
-def main(unused_argv):
+def main(_):
     """
     The training procedure.
     :return:
