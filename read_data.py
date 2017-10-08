@@ -212,20 +212,21 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         # capacity must be larger than min_after_dequeue and the amount larger
         #   determines the maximum we will prefetch.  Recommendation:
         #   min_after_dequeue + (num_threads + a small safety margin) * batch_size
+        # allow_smaller_final_batch False to ensure there must be batch_size examples returned.
         if shuffle:
-            capacity = (num_threads + 2) * batch_size
+            capacity = (num_threads + 3) * batch_size
             id_batch, image_batch, category_batch = (
                 tf.train.shuffle_batch(examples, batch_size,
                                        capacity, min_after_dequeue=batch_size,
                                        num_threads=num_threads,
-                                       allow_smaller_final_batch=True,
+                                       allow_smaller_final_batch=False,
                                        enqueue_many=True))
         else:
-            capacity = (num_threads + 2) * batch_size
+            capacity = (num_threads + 3) * batch_size
             id_batch, image_batch, category_batch = (
                 tf.train.batch(examples, batch_size, num_threads=num_threads,
                                capacity=capacity,
-                               allow_smaller_final_batch=True,
+                               allow_smaller_final_batch=False,
                                enqueue_many=True))
 
         return id_batch, image_batch, category_batch
