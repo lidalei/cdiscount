@@ -498,7 +498,7 @@ class LogisticRegression(object):
             else:
                 reg_loss = tf.constant(0.0, name='zero_reg_loss')
 
-        with tf.variable_scope('Train'):
+        with tf.variable_scope('Train'), tf.device('/cpu:0'):
             # TODO, Compute reg_loss in terms of variables, _w and full network
             if self.use_pretrain:
                 train_op_w = optimizer_w.apply_gradients(
@@ -733,7 +733,7 @@ class LogisticRegression(object):
                                  save_model_secs=600, saver=self.saver,
                                  init_fn=self._load_pre_train_model())
 
-        with sv.managed_session(config=tf.ConfigProto(log_device_placement=False)) as sess:
+        with sv.managed_session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             logging.info("Entering training loop...")
             # Obtain the current training step. Continue training from a checkpoint.
             start_step = sess.run(self.global_step)
