@@ -136,7 +136,7 @@ def tr_data_conv_fn(images, **kwargs):
     # Flatten the feature maps
     output = tf.reshape(activation2, [-1, conv_out_size])
 
-    out_size = 1024
+    out_size = 1536
     with tf.name_scope('fc1'):
         weights = weight_variable([conv_out_size, out_size], regularization=True)
         biases = bias_variable([out_size])
