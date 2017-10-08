@@ -466,11 +466,10 @@ class LogisticRegression(object):
 
                 tower_losses.append(tf.expand_dims(i_loss, 0))
                 # compute_gradients only return the gradients over given var_list.
-                with tf.device('/cpu:0'):
-                    if self.use_pretrain:
-                        tower_gradients_w.append(optimizer_w.compute_gradients(
-                            i_loss, var_list=[weights, biases]))
-                    tower_gradients.append(optimizer.compute_gradients(i_loss))
+                if self.use_pretrain:
+                    tower_gradients_w.append(optimizer_w.compute_gradients(
+                        i_loss, var_list=[weights, biases]))
+                tower_gradients.append(optimizer.compute_gradients(i_loss))
 
             loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
             pred_prob = tf.concat(tower_pred_prob, 0, name='pred_probability')
@@ -499,7 +498,7 @@ class LogisticRegression(object):
             else:
                 reg_loss = tf.constant(0.0, name='zero_reg_loss')
 
-        with tf.variable_scope('Train'), tf.device('/cpu:0'):
+        with tf.variable_scope('Train'):
             # TODO, Compute reg_loss in terms of variables, _w and full network
             if self.use_pretrain:
                 train_op_w = optimizer_w.apply_gradients(
