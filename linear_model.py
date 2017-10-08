@@ -20,7 +20,8 @@ class LinearClassifier(object):
     def fit(self, data_pipeline, raw_feature_size, tr_data_fn=None, tr_data_paras=None,
             l2_regs=None, validate_set=None, line_search=True):
         """
-        Compute weights and biases of linear classifier using normal equation. With line search for best l2_reg.
+        Compute weights and biases of linear classifier using normal equation.
+            With line search for best l2_reg.
         Args:
             data_pipeline: A namedtuple consisting of the following elements.
                 reader, features reader.
@@ -30,7 +31,7 @@ class LinearClassifier(object):
             raw_feature_size: The dimensionality of features.
             tr_data_fn: a function that transforms input data.
             tr_data_paras: Other parameters should be passed to tr_data_fn. A dictionary.
-            l2_regs: An array, each element represents how much the linear classifier weights should be penalized.
+            l2_regs: A list, each element represents how much the linear classifier weights should be penalized.
             validate_set: (data, labels) with dtype float32.
                 The data set (numpy arrays) used to choose the best l2_reg.
                 Sampled from whole validate set if necessary.
@@ -329,6 +330,45 @@ class LogisticRegression(object):
         self.pred_labels = None
         self.phase_train_pl = None
 
+    @staticmethod
+    def average_gradients(tower_grads):
+        """
+        Calculate the average gradient for each shared variable across all towers.
+        Note that this function provides a synchronization point across all towers.
+
+        Args:
+          tower_grads: List of lists of (gradient, variable) tuples. The outer list
+          is over individual gradients. The inner list is over the gradient
+          calculation for each tower.
+        Returns:
+          List of pairs of (gradient, variable) where the gradient has been averaged
+          across all towers.
+        Reference:
+            cifar10_multi_gpu_train.py in tensorflow/models.
+        """
+        average_grads = []
+        for grad_and_vars in zip(*tower_grads):
+            # Note that each grad_and_vars looks like the following:
+            #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+            grads = []
+            for g, _ in grad_and_vars:
+                # Add 0 dimension to the gradients to represent the tower.
+                expanded_g = tf.expand_dims(g, 0)
+
+                # Append on a 'tower' dimension which we will average over below.
+                grads.append(expanded_g)
+
+            # Average over the 'tower' dimension.
+            grad = tf.reduce_mean(tf.concat(grads, 0), 0)
+
+            # Keep in mind that the Variables are redundant because they are shared
+            # across towers. So .. we will just return the first tower's pointer to
+            # the Variable.
+            v = grad_and_vars[0][1]
+            grad_and_var = (grad, v)
+            average_grads.append(grad_and_var)
+        return average_grads
+
     def _build_graph(self):
         """
         Build graph.
@@ -346,70 +386,95 @@ class LogisticRegression(object):
 
         global_step = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='global_step')
 
-        # Get training data, multi-label
-        id_batch, raw_features_batch, labels_batch = (
-            get_input_data_tensors(self.train_data_pipeline,
-                                   onehot_label=True,
-                                   shuffle=True,
-                                   num_epochs=self.epochs,
-                                   name_scope='input'))
+        # Define the last classification layer, softmax or multi-label classification.
+        with tf.variable_scope('classification', reuse=None):
+            if self.initial_weights is None:
+                weights = tf.get_variable('weights', shape=[self.feature_size, self.num_classes],
+                                          initializer=tf.truncated_normal_initializer(
+                                              stddev=1.0 / np.sqrt(self.feature_size)),
+                                          regularizer=tf.identity)
+            else:
+                weights = tf.get_variable('weights', shape=[self.feature_size, self.num_classes],
+                                          initializer=self.initial_weights,
+                                          regularizer=tf.identity)
 
-        if self.tr_data_fn is None:
-            tr_features_batch = tf.identity(raw_features_batch)
-        else:
-            tr_features_batch = self.tr_data_fn(raw_features_batch, **self.tr_data_paras)
+            if self.initial_biases is None:
+                biases = tf.get_variable('biases', shape=[self.num_classes],
+                                         initializer=tf.constant_initializer(0.001))
+            else:
+                biases = tf.get_variable('biases', shape=[self.num_classes],
+                                         initializer=self.initial_biases)
+
+        with tf.name_scope('optimization'):
+            # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
+            optimizer_w = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate,
+                                                    name='opt_softmax')
+
+            # Stage 2, tune the whole net.
+            # Fine tuning the transformation and softmax layer with AdamOptimizer
+            # Note sharing the same optimizer is not recommended, for they use info of previous gradients.
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate / 10.0,
+                                               name='opt_full_net')
+
+        # Get training data, multi-label
+        id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
+            self.train_data_pipeline, onehot_label=True,
+            shuffle=True, num_epochs=self.epochs, name_scope='input')
+
+        with tf.name_scope('Loss'):
+            # Split the training batch into smaller mini-batches.
+            num_parallelism = 4
+            raw_features_batch_splits = tf.split(raw_features_batch, num_parallelism, axis=0)
+            labels_batch_splits = tf.split(labels_batch, num_parallelism, axis=0)
+
+            tower_losses = []
+            tower_pred_prob, tower_pred_labels = [], []
+            tower_gradients_w, tower_gradients = [], []
+            for i in range(num_parallelism):
+                # Perform the feature transformation.
+                if self.tr_data_fn is None:
+                    i_tr_features = tf.identity(raw_features_batch_splits[i])
+                else:
+                    i_tr_features = self.tr_data_fn(raw_features_batch_splits[i],
+                                                    **{**self.tr_data_paras,
+                                                       'reuse': True if i > 0 else None})
+
+                i_logits = tf.add(tf.matmul(i_tr_features, weights), biases, name='logits_{}'.format(i))
+                i_pred_prob = tf.nn.softmax(i_logits, dim=-1, name='pred_probability')
+                i_pred_labels = tf.argmax(i_logits, axis=-1, name='pred_labels')
+
+                tower_pred_prob.append(i_pred_prob)
+                tower_pred_labels.append(i_pred_labels)
+                """
+                loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=labels_batch, logits=logits, name='x_entropy_per_example')
+                """
+                # multi-label classification
+                i_loss_per_example = tf.reduce_sum(
+                    tf.nn.sigmoid_cross_entropy_with_logits(
+                        labels=tf.cast(labels_batch_splits[i], tf.float32), logits=i_logits),
+                    axis=-1, name='x_entropy_per_example_{}'.format(i))
+                i_loss = tf.reduce_mean(i_loss_per_example, name='x_entropy_{}'.format(i))
+
+                tower_losses.append(tf.expand_dims(i_loss, 0))
+                tower_gradients_w.append(optimizer_w.compute_gradients(i_loss, var_list=[weights, biases]))
+                tower_gradients.append(optimizer.compute_gradients(i_loss))
+
+            loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
+            pred_prob = tf.concat(tower_pred_prob, 0, name='pred_probability')
+            pred_labels = tf.concat(tower_pred_labels, 0, name='pred_labels')
+
             # Get the pretrained variables just after creating the transformation!!!
             # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
             # This will cause an error while restoring the variables.
-            if self.use_pretrain:
+            if self.use_pretrain is True and self.pretrained_var_list is None:
                 # OR tf.train.list_variables
                 self.pretrained_var_list = self.graph.get_collection(
                     tf.GraphKeys.GLOBAL_VARIABLES, scope=self.pretrained_scope) + self.graph.get_collection(
                     tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
                 logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
-                for var in self.pretrained_var_list:
-                    if len(var.shape) == 0:
-                        # Scalar
-                        tf.summary.scalar(var.op.name, var)
-                    else:
-                        tf.summary.histogram(var.op.name, var)
-
-        # Define num_classes logistic regression models parameters.
-        if self.initial_weights is None:
-            weights = tf.Variable(initial_value=tf.truncated_normal(
-                [self.feature_size, self.num_classes], stddev=1.0 / np.sqrt(self.feature_size)),
-                dtype=tf.float32, name='weights')
-        else:
-            weights = tf.Variable(initial_value=self.initial_weights, dtype=tf.float32, name='weights')
-        # tf.GraphKeys.REGULARIZATION_LOSSES contains all variables to regularize.
-        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weights)
-        tf.summary.histogram('model/weights', weights)
-
-        if self.initial_biases is None:
-            biases = tf.Variable(initial_value=tf.fill([self.num_classes], 0.001), name='biases')
-        else:
-            biases = tf.Variable(initial_value=self.initial_biases, name='biases')
-
-        tf.summary.histogram('model/biases', biases)
-
-        logits = tf.add(tf.matmul(tr_features_batch, weights), biases, name='logits')
-        pred_prob = tf.nn.softmax(logits, dim=-1, name='pred_probability')
-        pred_labels = tf.argmax(logits, axis=-1, name='pred_labels')
-
-        with tf.name_scope('train'):
-            """
-            loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=labels_batch, logits=logits, name='x_entropy_per_example')
-            """
-            # multi-label classification
-            loss_per_example = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=tf.cast(labels_batch, tf.float32), logits=logits), axis=-1,
-                name='x_entropy_per_example')
-
-            loss = tf.reduce_mean(loss_per_example, name='x_entropy')
-            tf.summary.scalar('loss/xentropy', loss)
-
+        with tf.name_scope('Regularization'):
             # Add regularization.
             reg_losses = []
             # tf.GraphKeys.REGULARIZATION_LOSSES contains all variables to regularize.
@@ -432,36 +497,26 @@ class LogisticRegression(object):
             else:
                 reg_loss = tf.constant(0.0, name='zero_reg_loss')
 
-            final_loss = tf.add(loss, reg_loss, name='final_loss')
+        with tf.name_scope('Train'):
+            # TODO, Compute reg_loss in terms of variables, _w and full network
+            train_op_w = optimizer_w.apply_gradients(self.average_gradients(tower_gradients_w),
+                                                     global_step=global_step)
+            train_op = optimizer.apply_gradients(self.average_gradients(tower_gradients),
+                                                 global_step=global_step)
 
-        with tf.name_scope('optimization'):
-            """
-            Optimize the softmax layer first and then 
-            optimize both softmax and transformation layer simultaneously.
-            Advanced optimizers might not be suitable because they use info of previous gradients.
-            # optimizer = tf.train.MomentumOptimizer(adap_learning_rate, 0.9, use_nesterov=True)
-            # optimizer = tf.train.AdamOptimizer(learning_rate=adap_learning_rate)
-            # optimizer_w = tf.train.RMSPropOptimizer(learning_rate=adap_learning_rate_w)
-            """
-            # Stage 1, tune softmax layer only when restoring from a pretrained checkpoint.
-            optimizer_w = tf.train.RMSPropOptimizer(learning_rate=self.init_learning_rate)
-            train_op_w = optimizer_w.minimize(final_loss,
-                                              global_step=global_step,
-                                              var_list=[weights, biases],
-                                              name='opt_softmax')
-
-            # Stage 2, tune the whole net.
-            # Fine tuning the transformation and softmax layer with AdamOptimizer
-            # Note sharing the same optimizer is not recommended.
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.init_learning_rate / 10.0)
-            train_op = optimizer.minimize(final_loss,
-                                          global_step=global_step,
-                                          name='opt_full_net')
+        # Add summary to trainable variables.
+        with tf.name_scope('Summary'):
+            for variable in tf.trainable_variables():
+                if len(variable.shape) == 0:
+                    tf.summary.scalar(variable.op.name, variable)
+                else:
+                    tf.summary.histogram(variable.op.name, variable)
 
         summary_op = tf.summary.merge_all()
         # summary_op = tf.constant(1.0)
 
-        # num_epochs needs local variables to be initialized. Put this line after all other graph construction.
+        # num_epochs needs local variables to be initialized.
+        # Put this line after all other graph construction.
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
         # Used for restoring training checkpoints.
@@ -479,7 +534,7 @@ class LogisticRegression(object):
 
         # To save global variables and savable objects, i.e., var_list is None.
         # Using rbf transform will also save centers and scaling factors.
-        saver = tf.train.Saver(max_to_keep=50, keep_checkpoint_every_n_hours=0.15)
+        saver = tf.train.Saver(max_to_keep=10, keep_checkpoint_every_n_hours=0.3)
 
         return saver
 
@@ -539,7 +594,7 @@ class LogisticRegression(object):
         """
         Logistic regression fit function.
         Args:
-            train_data_pipeline: A namedtuple consisting of reader, data_pattern, batch_size and num_readers.
+            train_data_pipeline: A namedtuple consisting of reader, data_pattern, batch_size and num_threads.
             raw_feature_size: The dimensionality of features.
             start_new_model: If True, start a new model instead of restoring from existing checkpoints.
             tr_data_fn: a function that transforms input data.
@@ -650,6 +705,23 @@ class LogisticRegression(object):
         else:
             logging.error('Failed to initialize logistic regression Graph.')
 
+        # Clean validation set
+        val_data, val_labels, val_labels_onthot = None, None, None
+        if validation_set is not None:
+            val_data, val_labels = validation_set
+            # Cut until the multiples of batch_size.
+            num_val_images = (len(val_labels) // self.batch_size) * self.batch_size
+            if num_val_images > 0:
+                val_data, val_labels = val_data[:num_val_images], val_labels[:num_val_images]
+                # multi-label classification requires onehot-encoded labels
+                eye_mat = np.eye(num_classes)
+                val_labels_onthot = eye_mat[val_labels]
+            else:
+                logging.warn('Not enough validation data {} < batch size {}.'.format(
+                    len(val_labels), self.batch_size))
+        else:
+            logging.info('No validation set is found.')
+
         # Start or restore training.
         # To avoid summary causing memory usage peak, manually save summaries.
         sv = tf.train.Supervisor(graph=self.graph, init_op=self.init_op, logdir=self.logdir,
@@ -699,14 +771,8 @@ class LogisticRegression(object):
 
                     if step % 800 == 0:
                         # Compute validation loss and performance (validation_fn).
-                        if validation_set is not None:
-                            val_data, val_labels = validation_set
-                            # multi-label classification requires onehot-encoded labels
-                            eye_mat = np.eye(num_classes)
-                            val_labels_onthot = eye_mat[val_labels]
-
+                        if num_val_images > 0:
                             # Compute validation loss.
-                            num_val_images = len(val_labels)
                             split_indices = np.linspace(0, num_val_images + 1,
                                                         num=max(num_val_images // self.batch_size, 2),
                                                         dtype=np.int32)
