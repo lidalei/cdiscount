@@ -14,7 +14,6 @@ from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
 
 from linear_model import LogisticRegression
 
-from slim.nets.inception import inception_resnet_v2_arg_scope, inception_resnet_v2
 from slim.nets.inception import inception_v4_arg_scope, inception_v4
 
 from functools import reduce
@@ -29,121 +28,116 @@ def tr_log_reg_fn(input_val, **kwargs):
         return tf.reshape(tf.cast(input_val, tf.float32), [-1, IMAGE_SIZE])
 
 
-def weight_variable(shape, regularization=False, name='weights'):
+def create_conv_layer(images, filter_shape, strides, name, regularization=True):
     """
-    :param shape: namedtuple([filter_height, filter_width, in_channels, out_channels])
+    :param images - images or feature maps
+    :param filter_shape: namedtuple([filter_height, filter_width, in_channels, out_channels])
         or a list in the form [filter_height, filter_width, in_channels, out_channels]
+    :param strides
     :param regularization: Whether to impose regularization or not.
     :param name: An optional name of the variable.
     :return: Variable corresponding to the kernel map or template.
     """
-    if isinstance(shape, ConvFilterShape):
-        shape = [shape.filter_height, shape.filter_width,
-                 shape.in_channels, shape.out_channels]
+    if isinstance(filter_shape, ConvFilterShape):
+        filter_shape = [filter_shape.filter_height, filter_shape.filter_width,
+                        filter_shape.in_channels, filter_shape.out_channels]
 
-    # filter_height * filter_width * in_channels
-    fan_in = reduce(mul, shape[:-1], 1)
+    bias_shape = filter_shape[-1]
+    with tf.variable_scope(name):
+        # filter_height * filter_width * in_channels
+        fan_in = reduce(mul, filter_shape[:-1], 1)
+        # Impose regularization only once when creating the variable.
+        weights = tf.get_variable(
+            'weights', shape=filter_shape,
+            initializer=tf.truncated_normal_initializer(stddev=1.0 / np.sqrt(fan_in)),
+            regularizer=tf.identity if regularization else None
+        )
 
-    initial = tf.truncated_normal(shape, stddev=1.0 / np.sqrt(fan_in))
-
-    weights = tf.Variable(initial_value=initial, name=name)
-    tf.summary.histogram('model/weights', weights)
-    if regularization:
-        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weights)
-
-    return weights
-
-
-def bias_variable(shape, name='biases'):
-    """
-    :param shape: [dim]
-    :param name: An optional name of the variable.
-    :return: Variable corresponding to the kernel map or template.
-    """
-    if isinstance(shape, ConvFilterShape):
-        shape = [shape.out_channels]
-
-    # A small positive initial values to avoid dead neurons.
-    initial = tf.constant(0.1, shape=shape)
-    biases = tf.Variable(initial_value=initial, name=name)
-    tf.summary.histogram('model/biases', biases)
-
-    return biases
-
-
-def create_conv_layer(input_tensor, filter_shape, strides, name):
-    with tf.name_scope(name):
-        weights = weight_variable(filter_shape, regularization=True)
-        biases = bias_variable(filter_shape)
+        # A small positive initial values to avoid dead neurons.
+        biases = tf.get_variable('biases', shape=bias_shape,
+                                 initializer=tf.constant_initializer(0.01))
 
         # When padding is 'SAME':
         # out_height = ceil(float(in_height) / float(strides[1]))
         # out_width = ceil(float(in_width) / float(strides[2]))
-        output = tf.add(tf.nn.conv2d(input_tensor, weights, strides, 'SAME'), biases)
+        output = tf.add(tf.nn.conv2d(images, weights, strides, 'SAME'), biases)
 
         return output
 
 
-def tr_data_conv_fn(images, **kwargs):
-    # Cast images to float type.
-    value = tf.cast(images, tf.float32)
+def tr_data_conv_fn(images, regularization=True, **kwargs):
+    reuse = True if 'reuse' in kwargs and kwargs['reuse'] is True else None
 
-    # Scale the imgs to [-1, +1]
-    scaled_value = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
+    with tf.variable_scope('ConvNet', values=[images], reuse=reuse):
+        # Cast images to float type.
+        value = tf.cast(images, tf.float32)
 
-    all_strides = []
-    # Convolutional layer 1.
-    filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=IMAGE_CHANNELS, out_channels=32)
-    conv1_strides = [1, 1, 1, 1]
-    all_strides.append(conv1_strides)
-    conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, name='conv1')
+        # Scale the imgs to [-1, +1]
+        scaled_value = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
 
-    pool1_strides = [1, 2, 2, 1]
-    all_strides.append(pool1_strides)
-    pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=pool1_strides,
-                           padding='SAME', name='max_pool1')
+        all_strides = []
+        # Convolutional layer 1.
+        filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
+                                        in_channels=IMAGE_CHANNELS, out_channels=32)
+        conv1_strides = [1, 1, 1, 1]
+        all_strides.append(conv1_strides)
+        conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, 'conv1',
+                                  regularization=regularization)
 
-    activation1 = tf.nn.relu(pool1, name='activation1')
+        pool1_strides = [1, 2, 2, 1]
+        all_strides.append(pool1_strides)
+        pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=pool1_strides,
+                               padding='SAME', name='max_pool1')
 
-    # Convolutional layer 2.
-    filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                    in_channels=32, out_channels=64)
-    conv2_strides = [1, 1, 1, 1]
-    all_strides.append(conv2_strides)
-    conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, name='conv2')
+        activation1 = tf.nn.relu(pool1, name='activation1')
 
-    pool2_strides = [1, 2, 2, 1]
-    all_strides.append(pool2_strides)
-    pool2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=pool2_strides,
-                           padding='SAME', name='max_pool2')
+        # Convolutional layer 2.
+        filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
+                                        in_channels=32, out_channels=64)
+        conv2_strides = [1, 1, 1, 1]
+        all_strides.append(conv2_strides)
+        conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, 'conv2',
+                                  regularization=regularization)
 
-    activation2 = tf.nn.relu(pool2, name='activation2')
+        pool2_strides = [1, 2, 2, 1]
+        all_strides.append(pool2_strides)
+        pool2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=pool2_strides,
+                               padding='SAME', name='max_pool2')
 
-    # Compute output size of the convolutional layers
-    channels = filter2_shape.out_channels
-    # Fully connected layer.
-    height = IMAGE_HEIGHT
-    width = IMAGE_WIDTH
-    for e in all_strides:
-        height = np.ceil(float(height) / float(e[1]))
-        width = np.ceil(float(width) / float(e[2]))
+        activation2 = tf.nn.relu(pool2, name='activation2')
 
-    conv_out_size = int(height * width * channels)
-    logging.info('Convolutional layers output {}-dimensional feature.'.format(
-        conv_out_size))
+        # Compute output size of the convolutional layers
+        channels = filter2_shape.out_channels
+        # Fully connected layer.
+        height = IMAGE_HEIGHT
+        width = IMAGE_WIDTH
+        for e in all_strides:
+            height = np.ceil(float(height) / float(e[1]))
+            width = np.ceil(float(width) / float(e[2]))
 
-    # Flatten the feature maps
-    output = tf.reshape(activation2, [-1, conv_out_size])
+        conv_out_size = int(height * width * channels)
+        if reuse is False:
+            logging.info(
+                'Convolutional layers output {}-dimensional feature.'.format(conv_out_size))
 
-    out_size = 1536
-    with tf.name_scope('fc1'):
-        weights = weight_variable([conv_out_size, out_size], regularization=True)
-        biases = bias_variable([out_size])
+        # Flatten the feature maps
+        output = tf.reshape(activation2, [-1, conv_out_size])
 
-        fc1 = tf.add(tf.matmul(output, weights), biases, name='fc1')
+        out_size = 1536
+        with tf.variable_scope('fc'):
+            weights = tf.get_variable(
+                'weights', shape=[conv_out_size, out_size],
+                initializer=tf.truncated_normal_initializer(stddev=1.0 / np.sqrt(conv_out_size)),
+                regularizer=tf.identity if regularization else None
+            )
 
-    return fc1
+            # A small positive initial values to avoid dead neurons.
+            biases = tf.get_variable('biases', shape=[out_size],
+                                     initializer=tf.constant_initializer(0.01))
+
+            fc = tf.add(tf.matmul(output, weights), biases, name='inner_prod')
+
+        return fc
 
 
 def transfer_learn_inception_v4(images, **kwargs):
