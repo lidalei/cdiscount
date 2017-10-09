@@ -156,7 +156,7 @@ class DataTFReader(object):
 
 
 def get_input_data_tensors(data_pipeline, onehot_label=False, shuffle=False, num_epochs=1,
-                           decode_image=True, name_scope='input'):
+                           fixed_batch_size=False, decode_image=True, name_scope='input'):
     reader = data_pipeline.reader
     data_pattern = data_pipeline.data_pattern
     batch_size = data_pipeline.batch_size
@@ -165,12 +165,13 @@ def get_input_data_tensors(data_pipeline, onehot_label=False, shuffle=False, num
     return _get_input_data_tensors(reader, data_pattern=data_pattern, batch_size=batch_size,
                                    num_threads=num_threads, onehot_label=onehot_label,
                                    shuffle=shuffle, num_epochs=num_epochs,
+                                   fixed_batch_size=fixed_batch_size,
                                    decode_image=decode_image, name_scope=name_scope)
 
 
 def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_threads=1,
                             onehot_label=False, shuffle=False, num_epochs=1,
-                            decode_image=True, name_scope='input'):
+                            fixed_batch_size=False, decode_image=True, name_scope='input'):
     """Creates the section of the graph which reads the input data.
 
     Similar to the same-name function in train.py.
@@ -182,6 +183,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
         onehot_label: Whether return onehot encoded label.
         shuffle: Boolean argument indicating whether shuffle examples.
         num_epochs: How many passed to go through the data files.
+        fixed_batch_size: If return fixed batch size.
         decode_image: Whether to decode image.
         name_scope: An identifier of this code.
 
@@ -220,7 +222,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
                 tf.train.shuffle_batch(examples, batch_size,
                                        capacity, min_after_dequeue=batch_size,
                                        num_threads=num_threads,
-                                       allow_smaller_final_batch=True,
+                                       allow_smaller_final_batch=not fixed_batch_size,
                                        enqueue_many=True))
         else:
             # allow_smaller_final_batch True to ensure all test examples are handled.
@@ -228,7 +230,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
             id_batch, image_batch, category_batch = (
                 tf.train.batch(examples, batch_size, num_threads=num_threads,
                                capacity=capacity,
-                               allow_smaller_final_batch=True,
+                               allow_smaller_final_batch=not fixed_batch_size,
                                enqueue_many=True))
 
         return id_batch, image_batch, category_batch
