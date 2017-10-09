@@ -737,7 +737,11 @@ class LogisticRegression(object):
                                  save_model_secs=600, saver=self.saver,
                                  init_fn=self._load_pre_train_model())
 
-        with sv.managed_session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+        # allow_soft_placement must be set to True to build towers on GPU,
+        # as some of the ops do not have GPU # implementations.
+        with sv.managed_session(
+                config=tf.ConfigProto(allow_soft_placement=True,
+                                      log_device_placement=True)) as sess:
             logging.info("Entering training loop...")
             # Obtain the current training step. Continue training from a checkpoint.
             start_step = sess.run(self.global_step)
