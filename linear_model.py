@@ -346,6 +346,8 @@ class LogisticRegression(object):
         Reference:
             cifar10_multi_gpu_train.py in tensorflow/models.
         """
+        if len(tower_grads) == 1:
+            return tower_grads[0]
         average_grads = []
         for grad_and_vars in zip(*tower_grads):
             # Note that each grad_and_vars looks like the following:
@@ -421,7 +423,7 @@ class LogisticRegression(object):
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Split'):
-            num_parallelism = 4
+            num_parallelism = 1
             raw_features_batch_splits = tf.split(raw_features_batch, num_parallelism, axis=0)
             labels_batch_splits = tf.split(labels_batch, num_parallelism, axis=0)
 
