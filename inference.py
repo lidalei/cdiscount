@@ -116,9 +116,11 @@ class BootstrapInference(object):
                     # In case fixed batch size is required.
                     # Some batches have less than batch size examples.
                     batch_size = test_data_pipeline.batch_size
-                    if len(id_batch_val) < batch_size:
-                        id_batch_val = id_batch_val[np.arange(batch_size) % len(id_batch_val)]
-                        img_batch_val = img_batch_val[np.arange(batch_size) % len(id_batch_val)]
+                    id_batch_val_length = len(id_batch_val)
+                    if id_batch_val_length < batch_size:
+                        indices = np.arange(batch_size) % id_batch_val_length
+                        id_batch_val = id_batch_val[indices]
+                        img_batch_val = img_batch_val[indices]
 
                     batch_pred_prob_list = []
                     for sess, img_input_batch, pred_prob, phase_train_pl in zip(
@@ -206,7 +208,7 @@ if __name__ == '__main__':
     flags.DEFINE_integer('num_threads', 2, 'Number of readers to form a batch.')
 
     # Separated by , (csv separator), e.g., log_reg,conv_net. Used in bagging.
-    flags.DEFINE_string('train_model_dirs', '/tmp/log_reg',
+    flags.DEFINE_string('train_model_dirs', '/tmp/inception_v4/log_reg/',
                         'The directories where to load trained logistic regression models.')
 
     flags.DEFINE_string('output_file', '/tmp/predictions_{}.csv'.format(int(time.time())),
