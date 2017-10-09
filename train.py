@@ -106,8 +106,23 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
 
         activation2 = tf.nn.relu(pool2, name='activation2')
 
+        # Convolutional layer 3.
+        filter3_shape = ConvFilterShape(filter_height=3, filter_width=3,
+                                        in_channels=64, out_channels=128)
+        conv3_strides = [1, 1, 1, 1]
+        all_strides.append(conv3_strides)
+        conv3 = create_conv_layer(activation2, filter3_shape, conv3_strides, 'conv3',
+                                  regularization=regularization)
+
+        pool3_strides = [1, 2, 2, 1]
+        all_strides.append(pool3_strides)
+        pool3 = tf.nn.max_pool(conv3, ksize=[1, 2, 2, 1], strides=pool3_strides,
+                               padding='SAME', name='max_pool3')
+
+        activation3 = tf.nn.relu(pool3, name='activation3')
+
         # Compute output size of the convolutional layers
-        channels = filter2_shape.out_channels
+        channels = filter3_shape.out_channels
         # Fully connected layer.
         height = IMAGE_HEIGHT
         width = IMAGE_WIDTH
@@ -121,7 +136,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
                 'Convolutional layers output {}-dimensional feature.'.format(conv_out_size))
 
         # Flatten the feature maps
-        output = tf.reshape(activation2, [-1, conv_out_size])
+        output = tf.reshape(activation3, [-1, conv_out_size])
 
         out_size = 1536
         with tf.variable_scope('fc'):
