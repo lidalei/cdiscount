@@ -113,6 +113,12 @@ class BootstrapInference(object):
                     id_batch_val, img_batch_val = test_sess.run([id_batch, img_batch])
                     logging.debug('id_batch_val: {}\nimg_batch_val: {}'.format(
                         id_batch_val, img_batch_val))
+                    # In case fixed batch size is required.
+                    # Some batches have less than batch size examples.
+                    batch_size = test_data_pipeline.batch_size
+                    if len(id_batch_val) < batch_size:
+                        id_batch_val = id_batch_val[np.arange(batch_size) % len(id_batch_val)]
+                        img_batch_val = img_batch_val[np.arange(batch_size) % len(id_batch_val)]
 
                     batch_pred_prob_list = []
                     for sess, img_input_batch, pred_prob, phase_train_pl in zip(
