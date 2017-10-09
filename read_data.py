@@ -220,7 +220,7 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
                 tf.train.shuffle_batch(examples, batch_size,
                                        capacity, min_after_dequeue=batch_size,
                                        num_threads=num_threads,
-                                       allow_smaller_final_batch=False,
+                                       allow_smaller_final_batch=True,
                                        enqueue_many=True))
         else:
             # allow_smaller_final_batch True to ensure all test examples are handled.
