@@ -68,7 +68,7 @@ def create_conv_layer(images, filter_shape, strides, name, regularization=True):
 def tr_data_conv_fn(images, regularization=True, **kwargs):
     reuse = True if 'reuse' in kwargs and kwargs['reuse'] is True else None
 
-    with tf.variable_scope('Pre-process', values=[images], reuse=reuse), tf.device('/cpu:0'):
+    with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
         # Scale the imgs to [-1, +1]
