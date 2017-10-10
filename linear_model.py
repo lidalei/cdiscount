@@ -542,7 +542,7 @@ class LogisticRegression(object):
 
         # To save global variables and savable objects, i.e., var_list is None.
         # Using rbf transform will also save centers and scaling factors.
-        saver = tf.train.Saver(max_to_keep=10, keep_checkpoint_every_n_hours=0.3)
+        saver = tf.train.Saver(max_to_keep=10, keep_checkpoint_every_n_hours=0.5)
 
         return saver
 
