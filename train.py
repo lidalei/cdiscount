@@ -69,6 +69,20 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
     reuse = True if 'reuse' in kwargs and kwargs['reuse'] is True else None
 
     with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
+        """
+        # dropout and batch normalization need to know the phase, training or validation (test).
+        phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+        tf.add_to_collection('phase_train_pl', phase_train_pl)
+
+        # Data augmentation
+        data_aug_fn = tf.cond(phase_train_pl,
+                              true_fn=lambda xs: tf.map_fn(
+                                  tf.image.random_flip_left_right, xs,
+                                  dtype=tf.uint8, name='rnd_flip_h'),
+                              false_fn=lambda xs: tf.identity(xs))
+
+        images = data_aug_fn(images)
+        """
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
         # Scale the imgs to [-1, +1]
@@ -155,7 +169,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
         return fc
 
 
-def vgg_19(images, **kwargs):
+def vgg(images, **kwargs):
     """
     From slim.nets.vgg.py
     """
@@ -166,18 +180,18 @@ def vgg_19(images, **kwargs):
         value = tf.cast(images, tf.float32)
         # Scale the imgs to [-1, +1]
         net = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
-
-    with tf.variable_scope('VGG19', values=[net], reuse=reuse):
+    # VGG A.
+    with tf.variable_scope('VGG', values=[net], reuse=reuse):
         # By default, slim.conv2d has activation_fn=nn.relu.
-        net = slim.repeat(net, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+        net = slim.repeat(net, 1, slim.conv2d, 64, [3, 3], scope='conv1')
         net = slim.max_pool2d(net, [2, 2], scope='pool1')
-        net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
+        net = slim.repeat(net, 1, slim.conv2d, 128, [3, 3], scope='conv2')
         net = slim.max_pool2d(net, [2, 2], scope='pool2')
-        net = slim.repeat(net, 4, slim.conv2d, 256, [3, 3], scope='conv3')
+        net = slim.repeat(net, 2, slim.conv2d, 256, [3, 3], scope='conv3')
         net = slim.max_pool2d(net, [2, 2], scope='pool3')
-        net = slim.repeat(net, 4, slim.conv2d, 512, [3, 3], scope='conv4')
+        net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv4')
         net = slim.max_pool2d(net, [2, 2], scope='pool4')
-        net = slim.repeat(net, 4, slim.conv2d, 512, [3, 3], scope='conv5')
+        net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv5')
         net = slim.max_pool2d(net, [2, 2], scope='pool5')
         # Fully connected layers.
         net = slim.flatten(net, scope='flatten')
@@ -228,7 +242,7 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # TODO, Change Me!
-    tr_data_fn = vgg_19
+    tr_data_fn = vgg
     tr_data_paras = {'reshape': True, 'size': 4096}
 
     train_data_pipeline = DataPipeline(reader=reader,
