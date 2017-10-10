@@ -143,11 +143,12 @@ class BootstrapInference(object):
                     now = time.time()
                     processing_count += 1
                     num_examples_processed += id_batch_val.shape[0]
-                    print('Batch processing step {}, elapsed {} s, processed {} examples in total'.format(
-                        processing_count, now - start_time, num_examples_processed))
+                    if processing_count % 10 == 0:
+                        print('Step {}, elapsed {} s, processed {} examples in total'.format(
+                            processing_count, now - start_time, num_examples_processed))
 
             except tf.errors.OutOfRangeError:
-                logging.info('Done batch predictions.')
+                logging.info('Done predictions.')
             finally:
                 # When done, ask the threads to stop.
                 coord.request_stop()
