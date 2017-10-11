@@ -413,7 +413,7 @@ class LogisticRegression(object):
 
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
-            self.train_data_pipeline, onehot_label=self.multi_label,
+            self.train_data_pipeline, onehot_label=self.multi_label is True,
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Split'):
