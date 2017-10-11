@@ -713,7 +713,7 @@ class LogisticRegression(object):
             logging.error('Failed to initialize logistic regression Graph.')
 
         # Clean validation set
-        val_data, val_labels, val_labels_onthot = None, None, None
+        val_data, val_labels = None, None
         if validation_set is not None:
             val_data, val_labels = validation_set
             # Cut until the multiples of batch_size.
@@ -721,8 +721,8 @@ class LogisticRegression(object):
             if num_val_images > 0:
                 val_data, val_labels = val_data[:num_val_images], val_labels[:num_val_images]
                 # multi-label classification requires onehot-encoded labels
-                # eye_mat = np.eye(num_classes)
-                # val_labels_onthot = eye_mat[val_labels]
+                eye_mat = np.eye(num_classes)
+                val_labels = eye_mat[val_labels]
             else:
                 logging.warn('Not enough validation data {} < batch size {}.'.format(
                     len(val_labels), self.batch_size))
@@ -733,7 +733,7 @@ class LogisticRegression(object):
         # To avoid summary causing memory usage peak, manually save summaries.
         sv = tf.train.Supervisor(graph=self.graph, init_op=self.init_op, logdir=self.logdir,
                                  global_step=self.global_step, summary_op=None,
-                                 save_model_secs=600, saver=self.saver,
+                                 save_model_secs=1800, saver=self.saver,
                                  init_fn=self._load_pre_train_model())
 
         # allow_soft_placement must be set to True to build towers on GPU,

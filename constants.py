@@ -45,6 +45,8 @@ def compute_accuracy(labels=None, predictions=None):
     :param predictions: The predicted labels.
     :return: The accuracy.
     """
+    if isinstance(labels, np.array) and len(labels.shape) == 2:
+        labels = np.argmax(labels, -1)
     return np.sum(np.equal(labels, predictions)) / np.size(labels)
 
 compute_accuracy.__name__ = 'accuracy'
