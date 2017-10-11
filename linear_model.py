@@ -382,7 +382,7 @@ class LogisticRegression(object):
         global_step = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='global_step')
 
         # Define the last classification layer, softmax or multi-label classification.
-        with tf.variable_scope('Classification', reuse=None):
+        with tf.variable_scope('Classification', reuse=None), tf.device('/cpu:0'):
             if self.initial_weights is None:
                 weights = tf.get_variable('weights', shape=[self.feature_size, self.num_classes],
                                           initializer=tf.truncated_normal_initializer(

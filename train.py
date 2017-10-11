@@ -201,11 +201,12 @@ def vgg(images, **kwargs):
         net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv5')
         net = slim.max_pool2d(net, [2, 2], scope='pool5')
         # Fully connected layers.
-        net = slim.flatten(net, scope='flatten')
-        net = slim.fully_connected(net, 4096, scope='fc6')
-        net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
-        net = slim.fully_connected(net, 4096, scope='fc7')
-        net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
+        with tf.device('/cpu:0'):
+            net = slim.flatten(net, scope='flatten')
+            net = slim.fully_connected(net, 4096, scope='fc6')
+            net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
+            net = slim.fully_connected(net, 4096, scope='fc7')
+            net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
 
         return net
 
