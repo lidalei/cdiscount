@@ -293,6 +293,7 @@ class LogisticRegression(object):
         self.batch_size = None
         self.tr_data_fn = None
         self.tr_data_paras = None
+        self.multi_label = None
         self.init_learning_rate = None
         self.decay_steps = None
         self.decay_rate = None
@@ -412,7 +413,7 @@ class LogisticRegression(object):
 
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
-            self.train_data_pipeline, onehot_label=False,
+            self.train_data_pipeline, onehot_label=self.multi_label,
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Split'):
@@ -449,16 +450,16 @@ class LogisticRegression(object):
                 tower_pred_prob.append(i_pred_prob)
                 tower_pred_labels.append(i_pred_labels)
 
-                i_loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                    labels=labels_batch_splits[i], logits=i_logits, name='x_entropy_per_example')
-                """
-                # multi-label classification
-                i_logistic_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-                    labels=tf.to_float(labels_batch_splits[i]),
-                    logits=i_logits, name='logistic_loss_{}'.format(i+1))
-                i_loss_per_example = tf.reduce_sum(
-                    i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i+1))
-                """
+                if self.multi_label:
+                    # multi-label classification
+                    i_logistic_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+                        labels=tf.to_float(labels_batch_splits[i]),
+                        logits=i_logits, name='logistic_loss_{}'.format(i + 1))
+                    i_loss_per_example = tf.reduce_sum(
+                        i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i + 1))
+                else:
+                    i_loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        labels=labels_batch_splits[i], logits=i_logits, name='x_entropy_per_example')
 
                 i_loss = tf.reduce_mean(i_loss_per_example, name='mean_loss_{}'.format(i+1))
 
@@ -593,7 +594,8 @@ class LogisticRegression(object):
             return None
 
     def fit(self, train_data_pipeline, raw_feature_size, start_new_model=False,
-            tr_data_fn=None, tr_data_paras=None, validation_set=None, validation_fn=None,
+            tr_data_fn=None, tr_data_paras=None, multi_label=False,
+            validation_set=None, validation_fn=None,
             init_learning_rate=0.0001, decay_steps=40000, decay_rate=0.95, epochs=None,
             l1_reg_rate=None, l2_reg_rate=None, pos_weights=None,
             initial_weights=None, initial_biases=None,
@@ -606,6 +608,7 @@ class LogisticRegression(object):
             start_new_model: If True, start a new model instead of restoring from existing checkpoints.
             tr_data_fn: a function that transforms input data.
             tr_data_paras: Other parameters should be passed to tr_data_fn. A dictionary.
+            multi_label: If use multi-label classification or multi-class classification.
             validation_set: A tuple contains the validation features and labels.
             validation_fn: The function to compute validation metric.
             init_learning_rate: Decayed gradient descent parameter.
@@ -634,6 +637,7 @@ class LogisticRegression(object):
         self.batch_size = batch_size
         self.tr_data_fn = tr_data_fn
         self.tr_data_paras = tr_data_paras
+        self.multi_label = multi_label
         self.init_learning_rate = init_learning_rate
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
@@ -721,8 +725,9 @@ class LogisticRegression(object):
             if num_val_images > 0:
                 val_data, val_labels = val_data[:num_val_images], val_labels[:num_val_images]
                 # multi-label classification requires onehot-encoded labels
-                eye_mat = np.eye(num_classes)
-                val_labels = eye_mat[val_labels]
+                if self.multi_label is True:
+                    eye_mat = np.eye(num_classes)
+                    val_labels = eye_mat[val_labels]
             else:
                 logging.warn('Not enough validation data {} < batch size {}.'.format(
                     len(val_labels), self.batch_size))
