@@ -179,7 +179,7 @@ def vgg(images, **kwargs):
     phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
     tf.add_to_collection('phase_train_pl', phase_train_pl)
 
-    keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.5, name='keep_prob'),
+    keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.75, name='keep_prob'),
                         lambda: tf.constant(1.0, name='keep_prob'))
 
     with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
