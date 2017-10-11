@@ -413,10 +413,11 @@ class LogisticRegression(object):
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
             self.train_data_pipeline, onehot_label=True,
+            fixed_batch_size=True,
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Split'):
-            num_parallelism = 1
+            num_parallelism = 2
             raw_features_batch_splits = tf.split(raw_features_batch, num_parallelism, axis=0)
             labels_batch_splits = tf.split(labels_batch, num_parallelism, axis=0)
 
