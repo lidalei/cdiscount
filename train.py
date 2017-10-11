@@ -198,8 +198,8 @@ def vgg(images, **kwargs):
         net = slim.max_pool2d(net, [2, 2], scope='pool3')
         net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv4')
         net = slim.max_pool2d(net, [2, 2], scope='pool4')
-        net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv5')
-        net = slim.max_pool2d(net, [2, 2], scope='pool5')
+        # net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv5')
+        # net = slim.max_pool2d(net, [2, 2], scope='pool5')
         # Fully connected layers.
         net = slim.flatten(net, scope='flatten')
         net = slim.fully_connected(net, 4096, scope='fc6')
