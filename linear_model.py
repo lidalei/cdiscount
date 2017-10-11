@@ -352,23 +352,16 @@ class LogisticRegression(object):
         for grad_and_vars in zip(*tower_grads):
             # Note that each grad_and_vars looks like the following:
             #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-            grads = []
-            for g, _ in grad_and_vars:
-                # Add 0 dimension to the gradients to represent the tower.
-                expanded_g = tf.expand_dims(g, 0)
+            grads = [g for g, _ in grad_and_vars]
 
-                # Append on a 'tower' dimension which we will average over below.
-                grads.append(expanded_g)
-
-            # Average over the 'tower' dimension.
-            grad = tf.reduce_mean(tf.concat(grads, 0), 0)
+            mean_grad = tf.scalar_mul(1.0 / len(grad_and_vars), tf.accumulate_n(grads))
 
             # Keep in mind that the Variables are redundant because they are shared
             # across towers. So .. we will just return the first tower's pointer to
             # the Variable.
             v = grad_and_vars[0][1]
-            grad_and_var = (grad, v)
-            average_grads.append(grad_and_var)
+            mean_grad_and_var = (mean_grad, v)
+            average_grads.append(mean_grad_and_var)
         return average_grads
 
     def _build_graph(self):
@@ -472,8 +465,13 @@ class LogisticRegression(object):
                 # compute_gradients only return the gradients over given var_list.
                 if self.use_pretrain:
                     tower_gradients_w.append(optimizer_w.compute_gradients(
-                        i_loss, var_list=[weights, biases]))
-                tower_gradients.append(optimizer.compute_gradients(i_loss))
+                        i_loss, var_list=[weights, biases],
+                        aggregation_method=tf.AggregationMethod.DEFAULT)
+                    )
+                tower_gradients.append(optimizer.compute_gradients(
+                    i_loss,
+                    aggregation_method=tf.AggregationMethod.DEFAULT)
+                )
 
             loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
             pred_prob = tf.concat(tower_pred_prob, 0, name='pred_probability')
