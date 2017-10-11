@@ -201,12 +201,11 @@ def vgg(images, **kwargs):
         net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv5')
         net = slim.max_pool2d(net, [2, 2], scope='pool5')
         # Fully connected layers.
-        with tf.device('/cpu:0'):
-            net = slim.flatten(net, scope='flatten')
-            net = slim.fully_connected(net, 4096, scope='fc6')
-            net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
-            net = slim.fully_connected(net, 4096, scope='fc7')
-            net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
+        net = slim.flatten(net, scope='flatten')
+        net = slim.fully_connected(net, 4096, scope='fc6')
+        net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
+        net = slim.fully_connected(net, 4096, scope='fc7')
+        net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
 
         return net
 
@@ -252,8 +251,8 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # TODO, Change Me!
-    tr_data_fn = vgg
-    tr_data_paras = {'reshape': True, 'size': 4096}
+    tr_data_fn = tr_data_conv_fn
+    tr_data_paras = {'reshape': True, 'size': 1536}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,

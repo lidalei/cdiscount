@@ -382,7 +382,7 @@ class LogisticRegression(object):
         global_step = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='global_step')
 
         # Define the last classification layer, softmax or multi-label classification.
-        with tf.variable_scope('Classification', reuse=None), tf.device('/cpu:0'):
+        with tf.variable_scope('Classification', reuse=None):
             if self.initial_weights is None:
                 weights = tf.get_variable('weights', shape=[self.feature_size, self.num_classes],
                                           initializer=tf.truncated_normal_initializer(
@@ -412,7 +412,7 @@ class LogisticRegression(object):
 
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
-            self.train_data_pipeline, onehot_label=True,
+            self.train_data_pipeline, onehot_label=False,
             shuffle=True, num_epochs=self.epochs, name_scope='Input')
 
         with tf.name_scope('Split'):
@@ -448,7 +448,7 @@ class LogisticRegression(object):
 
                 tower_pred_prob.append(i_pred_prob)
                 tower_pred_labels.append(i_pred_labels)
-                """
+
                 i_loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
                     labels=labels_batch_splits[i], logits=i_logits, name='x_entropy_per_example')
                 """
@@ -458,6 +458,7 @@ class LogisticRegression(object):
                     logits=i_logits, name='logistic_loss_{}'.format(i+1))
                 i_loss_per_example = tf.reduce_sum(
                     i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i+1))
+                """
 
                 i_loss = tf.reduce_mean(i_loss_per_example, name='mean_loss_{}'.format(i+1))
 
@@ -720,8 +721,8 @@ class LogisticRegression(object):
             if num_val_images > 0:
                 val_data, val_labels = val_data[:num_val_images], val_labels[:num_val_images]
                 # multi-label classification requires onehot-encoded labels
-                eye_mat = np.eye(num_classes)
-                val_labels_onthot = eye_mat[val_labels]
+                # eye_mat = np.eye(num_classes)
+                # val_labels_onthot = eye_mat[val_labels]
             else:
                 logging.warn('Not enough validation data {} < batch size {}.'.format(
                     len(val_labels), self.batch_size))
@@ -797,7 +798,7 @@ class LogisticRegression(object):
                                         [self.loss, self.pred_labels], feed_dict={
                                             **val_feed_dict,
                                             self.raw_features_batch: val_data[start_ind:end_ind],
-                                            self.labels_batch: val_labels_onthot[start_ind:end_ind]})
+                                            self.labels_batch: val_labels[start_ind:end_ind]})
 
                                     val_pred_labels.extend(ith_pred_labels)
                                 else:
@@ -805,7 +806,7 @@ class LogisticRegression(object):
                                         self.loss, feed_dict={
                                             **val_feed_dict,
                                             self.raw_features_batch: val_data[start_ind:end_ind],
-                                            self.labels_batch: val_labels_onthot[start_ind:end_ind]})
+                                            self.labels_batch: val_labels[start_ind:end_ind]})
 
                                 val_loss_vals.append(ith_val_loss_val * (end_ind - start_ind))
 
