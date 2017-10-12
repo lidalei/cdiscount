@@ -780,9 +780,10 @@ class LogisticRegression(object):
                         sv.summary_writer.add_run_metadata(run_metadata,
                                                            'step_{}'.format(step),
                                                            global_step=global_step_val)
-                    # Add train summary.
-                    sv.summary_computed(sess, summary, global_step=global_step_val)
                     # Add training loss summary.
+                    sv.summary_computed(sess, summary, global_step=global_step_val)
+                    sv.summary_writer.add_summary(
+                        make_summary('training/loss', loss_val), global_step_val)
                     print('Step {}, training loss {:.6f}'.format(global_step_val, loss_val))
 
                     if step % 800 == 0:
@@ -818,7 +819,7 @@ class LogisticRegression(object):
                             val_loss_val = sum(val_loss_vals) / num_val_images
                             # Add validation summary.
                             sv.summary_writer.add_summary(
-                                make_summary('validation/xentropy', val_loss_val), global_step_val)
+                                make_summary('validation/loss', val_loss_val), global_step_val)
 
                             if validation_fn is not None:
                                 val_func_name = validation_fn.__name__
