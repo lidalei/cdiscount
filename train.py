@@ -152,7 +152,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
         # Flatten the feature maps
         output = tf.reshape(activation3, [-1, conv_out_size])
 
-        out_size = 1536
+        out_size = 1792
         with tf.variable_scope('fc'):
             weights = tf.get_variable(
                 'weights', shape=[conv_out_size, out_size],
@@ -252,7 +252,7 @@ def main(unused_argv):
 
     # TODO, Change Me!
     tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    tr_data_paras = {'reshape': True, 'size': 1792}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
