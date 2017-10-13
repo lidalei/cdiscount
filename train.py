@@ -86,11 +86,11 @@ def tr_data_conv_fn(images, **kwargs):
         """
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
-        # Scale the imgs to [-1, +1]
-        scaled_value = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
+        # Subtract the imgs by mean pixel value
+        net = tf.subtract(value, MEAN_PIXEL_VALUE)
 
-    with tf.variable_scope('ConvNet', values=[scaled_value], reuse=reuse):
-        net = slim.conv2d(scaled_value, 32, [3, 3],
+    with tf.variable_scope('ConvNet', values=[net], reuse=reuse):
+        net = slim.conv2d(net, 32, [3, 3],
                           biases_initializer=tf.constant_initializer(0.01),
                           scope='conv1')
         net = slim.max_pool2d(net, [2, 2], scope='max_pool1')
@@ -131,7 +131,7 @@ def vgg(images, **kwargs):
     with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
-        # Scale the imgs by mean pixel value
+        # Subtract the imgs by mean pixel value
         net = tf.subtract(value, MEAN_PIXEL_VALUE)
     # VGG A.
     with tf.variable_scope('VGG', values=[net], reuse=reuse):
