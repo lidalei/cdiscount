@@ -90,10 +90,10 @@ def tr_data_conv_fn(images, **kwargs):
         net = tf.subtract(value, MEAN_PIXEL_VALUE)
 
     # Check Delving Deep into Rectifiers for weights initialization when relu is used
+    # Biases are initialized to zero, for weights already break the symmetry.
     with tf.variable_scope('ConvNet', values=[net], reuse=reuse), slim.arg_scope(
         [slim.conv2d, slim.fully_connected],
-            weights_initializer=slim.variance_scaling_initializer(),
-            biases_initializer=tf.constant_initializer(0.01)):
+            weights_initializer=slim.variance_scaling_initializer()):
         net = slim.conv2d(net, 32, [3, 3], scope='conv1')
         net = slim.max_pool2d(net, [2, 2], scope='max_pool1')
 
