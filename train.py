@@ -92,7 +92,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
         all_strides = []
         # Convolutional layer 1.
         filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                        in_channels=IMAGE_CHANNELS, out_channels=32)
+                                        in_channels=IMAGE_CHANNELS, out_channels=64)
         conv1_strides = [1, 1, 1, 1]
         all_strides.append(conv1_strides)
         conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, 'conv1',
@@ -107,7 +107,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
 
         # Convolutional layer 2.
         filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                        in_channels=32, out_channels=64)
+                                        in_channels=64, out_channels=128)
         conv2_strides = [1, 1, 1, 1]
         all_strides.append(conv2_strides)
         conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, 'conv2',
@@ -122,7 +122,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
 
         # Convolutional layer 3.
         filter3_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                        in_channels=64, out_channels=128)
+                                        in_channels=128, out_channels=256)
         conv3_strides = [1, 1, 1, 1]
         all_strides.append(conv3_strides)
         conv3 = create_conv_layer(activation2, filter3_shape, conv3_strides, 'conv3',
@@ -152,7 +152,7 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
         # Flatten the feature maps
         output = tf.reshape(activation3, [-1, conv_out_size])
 
-        out_size = 1792
+        out_size = 2048
         with tf.variable_scope('fc'):
             weights = tf.get_variable(
                 'weights', shape=[conv_out_size, out_size],
@@ -252,7 +252,7 @@ def main(unused_argv):
 
     # TODO, Change Me!
     tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 1792}
+    tr_data_paras = {'reshape': True, 'size': 2048}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
