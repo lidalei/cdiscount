@@ -194,8 +194,8 @@ def _get_input_data_tensors(reader, data_pattern=None, batch_size=1024, num_thre
     Raises:
         IOError: If no files matching the given pattern were found.
     """
-    if (decode_image is not True) and (decode_image is not False):
-        raise ValueError('decode_image {} can either True or False.'.format(decode_image))
+    if not isinstance(decode_image, bool):
+        raise ValueError('decode_image {} can either be True or False.'.format(decode_image))
 
     # Glob() can be replace with tf.train.match_filenames_once(), which is an operation.
     files = gfile.Glob(data_pattern)
@@ -264,16 +264,23 @@ def main(_):
 
     g = tf.Graph()
     with g.as_default() as g:
-        sum_labels_onehot = tf.Variable(tf.zeros([NUM_CLASSES]))
+        num_images = tf.Variable(0, dtype=tf.int32, name='num_images')
+        sum_labels_onehot = tf.Variable(tf.zeros([NUM_CLASSES], dtype=tf.int32), name='sum_labels')
+        sum_pixels = tf.Variable(tf.zeros([IMAGE_CHANNELS], dtype=tf.int64), name='sum_pixels')
 
-        # Avoid decoding images
+        # decoding images can be avoided
         id_batch, image_batch, label_batch = get_input_data_tensors(
-            data_pipeline, onehot_label=True, shuffle=False, decode_image=False)
+            data_pipeline, onehot_label=True, shuffle=False, decode_image=True)
+
+        num_images_op = num_images.assign_add(tf.shape(id_batch)[0])
 
         sum_labels_onehot_op = sum_labels_onehot.assign_add(
-            tf.reduce_sum(tf.cast(label_batch, tf.float32), axis=0))
+            tf.reduce_sum(tf.cast(label_batch, tf.int32), axis=0))
 
-        with tf.control_dependencies([sum_labels_onehot_op]):
+        sum_pixels_op = sum_pixels.assign_add(
+            tf.reduce_sum(tf.cast(image_batch, tf.int64), axis=[0, 1, 2]))
+
+        with tf.control_dependencies([num_images_op, sum_labels_onehot_op, sum_pixels_op]):
             accum_non_op = tf.no_op()
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
@@ -308,10 +315,20 @@ def main(_):
         # Wait for threads to finish.
         coord.join(threads)
 
+        num_images_val = sess.run(num_images)
         sum_labels_onehot_val = sess.run(sum_labels_onehot)
+        sum_pixels_val = sess.run(sum_pixels)
+
+        print('num images: {}'.format(num_images_val))
         # print('sum labels onehot: {}'.format(','.join(sum_labels_onehot_val.astype(np.str))))
+        print('mean pixels: {}'.format(
+            sum_pixels_val / (num_images_val * IMAGE_HEIGHT * IMAGE_WIDTH)))
+
         with open('sum_labels_one_hot.pickle', mode='wb') as f:
             pickle.dump(sum_labels_onehot_val, f)
+
+        with open('mean_pixels.pickle', 'wb') as f:
+            pickle.dump(sum_pixels_val / (num_images_val * IMAGE_HEIGHT * IMAGE_WIDTH), f)
 
         summary_writer.close()
 
