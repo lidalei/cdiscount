@@ -23,6 +23,7 @@ IMAGE_WIDTH = 180
 IMAGE_HEIGHT = 180
 IMAGE_CHANNELS = 3
 IMAGE_SIZE = IMAGE_HEIGHT * IMAGE_WIDTH * IMAGE_CHANNELS
+MEAN_PIXEL_VALUE = [199.02578378, 195.51931958, 192.0718313]
 
 DataPipeline = namedtuple('DataPipeline', ['reader', 'data_pattern', 'batch_size', 'num_threads'])
 ConvFilterShape = namedtuple('ConvFilterShape', ['filter_height', 'filter_width', 'in_channels', 'out_channels'])

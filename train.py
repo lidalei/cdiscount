@@ -10,7 +10,8 @@ from constants import NUM_TRAIN_IMAGES, NUM_CLASSES, DataPipeline
 from constants import ConvFilterShape, compute_accuracy
 from constants import TRAIN_TF_DATA_FILE_NAME, VALIDATION_PICKLE_DATA_FILE_NAME
 from constants import TRAIN_VAL_TF_DATA_FILE_NAME
-from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS, IMAGE_SIZE
+from constants import IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS
+from constants import IMAGE_SIZE, MEAN_PIXEL_VALUE
 
 from linear_model import LogisticRegression
 
@@ -185,8 +186,8 @@ def vgg(images, **kwargs):
     with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
-        # Scale the imgs to [-1, +1]
-        net = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
+        # Scale the imgs by mean pixel value
+        net = tf.subtract(value, MEAN_PIXEL_VALUE)
     # VGG A.
     with tf.variable_scope('VGG', values=[net], reuse=reuse):
         # By default, slim.conv2d has activation_fn=nn.relu.
