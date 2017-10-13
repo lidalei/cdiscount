@@ -177,11 +177,11 @@ def vgg(images, **kwargs):
     reuse = True if 'reuse' in kwargs and kwargs['reuse'] is True else None
 
     # dropout and batch normalization need to know the phase, training or validation (test).
-    phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
-    tf.add_to_collection('phase_train_pl', phase_train_pl)
-
-    keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.75, name='keep_prob'),
-                        lambda: tf.constant(1.0, name='keep_prob'))
+    # phase_train_pl = tf.placeholder_with_default(True, [], name='phase_train_pl')
+    # tf.add_to_collection('phase_train_pl', phase_train_pl)
+    #
+    # keep_prob = tf.cond(phase_train_pl, lambda: tf.constant(0.75, name='keep_prob'),
+    #                     lambda: tf.constant(1.0, name='keep_prob'))
 
     with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
         # Cast images to float type.
@@ -204,9 +204,9 @@ def vgg(images, **kwargs):
         # Fully connected layers.
         net = slim.flatten(net, scope='flatten')
         net = slim.fully_connected(net, 4096, scope='fc6')
-        net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
+        # net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
         net = slim.fully_connected(net, 4096, scope='fc7')
-        net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
+        # net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
 
         return net
 
@@ -252,8 +252,8 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # TODO, Change Me!
-    tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 2048}
+    tr_data_fn = vgg
+    tr_data_paras = {'reshape': True, 'size': 4096}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
