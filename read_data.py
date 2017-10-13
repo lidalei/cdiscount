@@ -264,10 +264,12 @@ def main(_):
 
     g = tf.Graph()
     with g.as_default() as g:
+        global_step = tf.Variable(0, trainable=False, name='global_step')
         num_images = tf.Variable(0, dtype=tf.int32, name='num_images')
         sum_labels_onehot = tf.Variable(tf.zeros([NUM_CLASSES], dtype=tf.int32), name='sum_labels')
         sum_pixels = tf.Variable(tf.zeros([IMAGE_CHANNELS], dtype=tf.int64), name='sum_pixels')
 
+        global_step_inc_op = global_step.assign_add(1)
         # decoding images can be avoided
         id_batch, image_batch, label_batch = get_input_data_tensors(
             data_pipeline, onehot_label=True, shuffle=False, decode_image=True)
@@ -280,7 +282,8 @@ def main(_):
         sum_pixels_op = sum_pixels.assign_add(
             tf.reduce_sum(tf.cast(image_batch, tf.int64), axis=[0, 1, 2]))
 
-        with tf.control_dependencies([num_images_op, sum_labels_onehot_op, sum_pixels_op]):
+        with tf.control_dependencies(
+                [global_step_inc_op, num_images_op, sum_labels_onehot_op, sum_pixels_op]):
             accum_non_op = tf.no_op()
 
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer(),
@@ -291,7 +294,7 @@ def main(_):
     with tf.Session(graph=g) as sess:
         sess.run(init_op)
 
-        summary_writer = tf.summary.FileWriter('/tmp', graph=sess.graph)
+        summary_writer = tf.summary.FileWriter('/tmp/statistics', graph=sess.graph)
 
         # Start input enqueue threads.
         coord = tf.train.Coordinator()
@@ -299,7 +302,9 @@ def main(_):
 
         try:
             while not coord.should_stop():
-                _ = sess.run(accum_non_op)
+                _, global_step_val = sess.run(accum_non_op, global_step)
+                if global_step_val % 10 == 0:
+                    print('Step: {}'.format(global_step_val))
                 # id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
                 #     [id_batch, image_batch, label_batch, summary_op])
                 # logging.debug('id: {}, image: {}, label: {}'.format(
