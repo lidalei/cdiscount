@@ -105,7 +105,7 @@ def tr_data_conv_fn(images, **kwargs):
 
         net = slim.flatten(net, scope='flatten')
 
-        out_size = 1536
+        out_size = 4096
         net = slim.fully_connected(net, out_size, scope='fc')
 
         return net
@@ -196,7 +196,7 @@ def main(unused_argv):
 
     # TODO, Change Me!
     tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    tr_data_paras = {'reshape': True, 'size': 4096}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
