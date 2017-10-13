@@ -89,28 +89,24 @@ def tr_data_conv_fn(images, **kwargs):
         # Subtract the imgs by mean pixel value
         net = tf.subtract(value, MEAN_PIXEL_VALUE)
 
-    with tf.variable_scope('ConvNet', values=[net], reuse=reuse):
-        net = slim.conv2d(net, 32, [3, 3],
-                          biases_initializer=tf.constant_initializer(0.01),
-                          scope='conv1')
+    # Check Delving Deep into Rectifiers for weights initialization when relu is used
+    with tf.variable_scope('ConvNet', values=[net], reuse=reuse), slim.arg_scope(
+        [slim.conv2d, slim.fully_connected],
+            weights_initializer=slim.variance_scaling_initializer(),
+            biases_initializer=tf.constant_initializer(0.01)):
+        net = slim.conv2d(net, 32, [3, 3], scope='conv1')
         net = slim.max_pool2d(net, [2, 2], scope='max_pool1')
 
-        net = slim.conv2d(net, 64, [3, 3],
-                          biases_initializer=tf.constant_initializer(0.01),
-                          scope='conv2')
+        net = slim.conv2d(net, 64, [3, 3], scope='conv2')
         net = slim.max_pool2d(net, [2, 2], scope='max_pool2')
 
-        net = slim.conv2d(net, 128, [3, 3],
-                          biases_initializer=tf.constant_initializer(0.01),
-                          scope='conv3')
+        net = slim.conv2d(net, 128, [3, 3], scope='conv3')
         net = slim.max_pool2d(net, [2, 2], scope='max_pool3')
 
         net = slim.flatten(net, scope='flatten')
 
         out_size = 1536
-        net = slim.fully_connected(net, out_size,
-                                   biases_initializer=tf.constant_initializer(0.01),
-                                   scope='fc')
+        net = slim.fully_connected(net, out_size, scope='fc')
 
         return net
 
