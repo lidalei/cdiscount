@@ -291,7 +291,7 @@ def main(_):
 
         # summary_op = tf.summary.merge_all()
 
-    with tf.Session(graph=g) as sess:
+    with tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         sess.run(init_op)
 
         summary_writer = tf.summary.FileWriter('/tmp/statistics', graph=sess.graph)
