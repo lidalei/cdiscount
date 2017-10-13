@@ -305,7 +305,7 @@ def main(_):
                 # logging.debug('id: {}, image: {}, label: {}'.format(
                 #     id_batch_val, image_batch_val[0], label_batch_val))
                 # summary_writer.add_summary(summary)
-                coord.request_stop()
+                # coord.request_stop()
         except tf.errors.OutOfRangeError:
             logging.info('One epoch done.')
         finally:
