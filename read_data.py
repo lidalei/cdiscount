@@ -302,7 +302,7 @@ def main(_):
 
         try:
             while not coord.should_stop():
-                _, global_step_val = sess.run(accum_non_op, global_step)
+                _, global_step_val = sess.run([accum_non_op, global_step])
                 if global_step_val % 10 == 0:
                     print('Step: {}'.format(global_step_val))
                 # id_batch_val, image_batch_val, label_batch_val, summary = sess.run(
