@@ -66,7 +66,7 @@ def create_conv_layer(images, filter_shape, strides, name, regularization=True):
         return output
 
 
-def tr_data_conv_fn(images, regularization=True, **kwargs):
+def tr_data_conv_fn(images, **kwargs):
     reuse = True if 'reuse' in kwargs and kwargs['reuse'] is True else None
 
     with tf.variable_scope('Pre-process', values=[images], reuse=reuse):
@@ -90,84 +90,29 @@ def tr_data_conv_fn(images, regularization=True, **kwargs):
         scaled_value = tf.subtract(tf.scalar_mul(2.0 / 255.0, value), 1.0)
 
     with tf.variable_scope('ConvNet', values=[scaled_value], reuse=reuse):
-        all_strides = []
-        # Convolutional layer 1.
-        filter1_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                        in_channels=IMAGE_CHANNELS, out_channels=32)
-        conv1_strides = [1, 1, 1, 1]
-        all_strides.append(conv1_strides)
-        conv1 = create_conv_layer(scaled_value, filter1_shape, conv1_strides, 'conv1',
-                                  regularization=regularization)
+        net = slim.conv2d(scaled_value, 32, [3, 3],
+                          biases_initializer=tf.constant_initializer(0.01),
+                          scope='conv1')
+        net = slim.max_pool2d(net, [2, 2], scope='max_pool1')
 
-        pool1_strides = [1, 2, 2, 1]
-        all_strides.append(pool1_strides)
-        pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=pool1_strides,
-                               padding='SAME', name='max_pool1')
+        net = slim.conv2d(net, 64, [3, 3],
+                          biases_initializer=tf.constant_initializer(0.01),
+                          scope='conv2')
+        net = slim.max_pool2d(net, [2, 2], scope='max_pool2')
 
-        activation1 = tf.nn.relu(pool1, name='activation1')
+        net = slim.conv2d(net, 128, [3, 3],
+                          biases_initializer=tf.constant_initializer(0.01),
+                          scope='conv3')
+        net = slim.max_pool2d(net, [2, 2], scope='max_pool3')
 
-        # Convolutional layer 2.
-        filter2_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                        in_channels=32, out_channels=64)
-        conv2_strides = [1, 1, 1, 1]
-        all_strides.append(conv2_strides)
-        conv2 = create_conv_layer(activation1, filter2_shape, conv2_strides, 'conv2',
-                                  regularization=regularization)
-
-        pool2_strides = [1, 2, 2, 1]
-        all_strides.append(pool2_strides)
-        pool2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=pool2_strides,
-                               padding='SAME', name='max_pool2')
-
-        activation2 = tf.nn.relu(pool2, name='activation2')
-
-        # Convolutional layer 3.
-        filter3_shape = ConvFilterShape(filter_height=3, filter_width=3,
-                                        in_channels=64, out_channels=128)
-        conv3_strides = [1, 1, 1, 1]
-        all_strides.append(conv3_strides)
-        conv3 = create_conv_layer(activation2, filter3_shape, conv3_strides, 'conv3',
-                                  regularization=regularization)
-
-        pool3_strides = [1, 2, 2, 1]
-        all_strides.append(pool3_strides)
-        pool3 = tf.nn.max_pool(conv3, ksize=[1, 2, 2, 1], strides=pool3_strides,
-                               padding='SAME', name='max_pool3')
-
-        activation3 = tf.nn.relu(pool3, name='activation3')
-
-        # Compute output size of the convolutional layers
-        channels = filter3_shape.out_channels
-        # Fully connected layer.
-        height = IMAGE_HEIGHT
-        width = IMAGE_WIDTH
-        for e in all_strides:
-            height = np.ceil(float(height) / float(e[1]))
-            width = np.ceil(float(width) / float(e[2]))
-
-        conv_out_size = int(height * width * channels)
-        if reuse is False:
-            logging.info(
-                'Convolutional layers output {}-dimensional feature.'.format(conv_out_size))
-
-        # Flatten the feature maps
-        output = tf.reshape(activation3, [-1, conv_out_size])
+        net = slim.flatten(net, scope='flatten')
 
         out_size = 1536
-        with tf.variable_scope('fc'):
-            weights = tf.get_variable(
-                'weights', shape=[conv_out_size, out_size],
-                initializer=tf.truncated_normal_initializer(stddev=1.0 / np.sqrt(conv_out_size)),
-                regularizer=tf.identity if regularization else None
-            )
+        net = slim.fully_connected(net, out_size,
+                                   biases_initializer=tf.constant_initializer(0.01),
+                                   scope='fc')
 
-            # A small positive initial values to avoid dead neurons.
-            biases = tf.get_variable('biases', shape=[out_size],
-                                     initializer=tf.constant_initializer(0.01))
-
-            fc = tf.add(tf.matmul(output, weights), biases, name='inner_prod')
-
-        return fc
+        return net
 
 
 def vgg(images, **kwargs):
@@ -190,7 +135,7 @@ def vgg(images, **kwargs):
         net = tf.subtract(value, MEAN_PIXEL_VALUE)
     # VGG A.
     with tf.variable_scope('VGG', values=[net], reuse=reuse):
-        # By default, slim.conv2d has activation_fn=nn.relu.
+        # By default, slim.conv2d has activation_fn=nn.relu and padding SAME.
         net = slim.repeat(net, 1, slim.conv2d, 64, [3, 3], scope='conv1')
         net = slim.max_pool2d(net, [2, 2], scope='pool1')
         net = slim.repeat(net, 1, slim.conv2d, 128, [3, 3], scope='conv2')
@@ -201,11 +146,13 @@ def vgg(images, **kwargs):
         net = slim.max_pool2d(net, [2, 2], scope='pool4')
         net = slim.repeat(net, 2, slim.conv2d, 512, [3, 3], scope='conv5')
         net = slim.max_pool2d(net, [2, 2], scope='pool5')
-        # Fully connected layers.
+        # Fully connected layers as convolutional layers.
         net = slim.flatten(net, scope='flatten')
         net = slim.fully_connected(net, 4096, scope='fc6')
+        # net = slim.conv2d(net, 4096, [5, 5], padding='VALID', scope='fc6')
         # net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout6')
         net = slim.fully_connected(net, 4096, scope='fc7')
+        # net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
         # net = tf.nn.dropout(net, keep_prob=keep_prob, name='dropout7')
 
         return net
@@ -252,8 +199,8 @@ def main(unused_argv):
         val_data, val_labels = pickle_load(pickle_f)
 
     # TODO, Change Me!
-    tr_data_fn = vgg
-    tr_data_paras = {'reshape': True, 'size': 4096}
+    tr_data_fn = tr_data_conv_fn
+    tr_data_paras = {'reshape': True, 'size': 1536}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
