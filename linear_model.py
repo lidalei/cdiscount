@@ -726,7 +726,7 @@ class LogisticRegression(object):
                 val_data, val_labels = val_data[:num_val_images], val_labels[:num_val_images]
                 # multi-label classification requires onehot-encoded labels
                 if self.multi_label is True:
-                    eye_mat = np.eye(num_classes)
+                    eye_mat = np.eye(num_classes, dtype=np.int32)
                     val_labels = eye_mat[val_labels]
             else:
                 logging.warn('Not enough validation data {} < batch size {}.'.format(
