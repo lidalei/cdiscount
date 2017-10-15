@@ -86,8 +86,8 @@ def tr_data_conv_fn(images, **kwargs):
         """
         # Cast images to float type.
         value = tf.cast(images, tf.float32)
-        # Subtract the imgs by mean pixel value
-        net = tf.subtract(value, MEAN_PIXEL_VALUE)
+        # Subtract the imgs by mean pixel value and divide by 255.
+        net = tf.scalar_mul(1.0 / 255.0, tf.subtract(value, MEAN_PIXEL_VALUE))
 
     # Check Delving Deep into Rectifiers for weights initialization when relu is used
     # Biases are initialized to zero, for weights already break the symmetry.
@@ -103,12 +103,13 @@ def tr_data_conv_fn(images, **kwargs):
         net = slim.conv2d(net, 128, [3, 3], scope='conv3')
         net = slim.max_pool2d(net, [2, 2], scope='max_pool3')
 
+        net = slim.conv2d(net, 256, [3, 3], scope='conv4')
+        net = slim.max_pool2d(net, [2, 2], scope='max_pool4')
+
         net = slim.flatten(net, scope='flatten')
 
         out_size = 1536
-        net = slim.fully_connected(net, out_size,
-                                   activation_fn=None,
-                                   scope='fc')
+        net = slim.fully_connected(net, out_size, scope='fc')
 
         return net
 
@@ -210,6 +211,7 @@ def main(unused_argv):
                 raw_feature_size=(IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS),
                 start_new_model=FLAGS.start_new_model,
                 tr_data_fn=tr_data_fn, tr_data_paras=tr_data_paras,
+                multi_label=True,
                 validation_set=(val_data, val_labels), validation_fn=compute_accuracy,
                 init_learning_rate=0.001, decay_steps=NUM_TRAIN_IMAGES // 2,
                 use_pretrain=FLAGS.use_pretrain,
