@@ -48,7 +48,7 @@ def compute_accuracy(labels=None, predictions=None):
     """
     labels = np.array(labels, dtype=np.int32)
     if len(labels.shape) == 2:
-        labels = np.max(labels, -1, keepdims=False)
+        labels = np.argmax(labels, -1)
     return np.sum(np.equal(labels, predictions)) / np.size(labels)
 
 compute_accuracy.__name__ = 'accuracy'
