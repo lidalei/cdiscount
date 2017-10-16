@@ -202,7 +202,7 @@ def main(unused_argv):
 
     # TODO, Change Me!
     tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 1536}
+    tr_data_paras = {'reshape': True, 'size': 2048}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
