@@ -95,20 +95,23 @@ def tr_data_conv_fn(images, **kwargs):
         [slim.conv2d, slim.fully_connected],
             weights_initializer=slim.variance_scaling_initializer()):
         net = slim.conv2d(net, 32, [3, 3], scope='conv1')
-        net = slim.max_pool2d(net, [2, 2], scope='max_pool1')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool1')
 
         net = slim.conv2d(net, 64, [3, 3], scope='conv2')
-        net = slim.max_pool2d(net, [2, 2], scope='max_pool2')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool2')
 
         net = slim.conv2d(net, 128, [3, 3], scope='conv3')
-        net = slim.max_pool2d(net, [2, 2], scope='max_pool3')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool3')
 
         net = slim.conv2d(net, 256, [3, 3], scope='conv4')
-        net = slim.max_pool2d(net, [2, 2], scope='max_pool4')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool4')
+
+        net = slim.conv2d(net, 256, [3, 3], scope='conv5')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool5')
 
         net = slim.flatten(net, scope='flatten')
 
-        out_size = 1536
+        out_size = 2048
         net = slim.fully_connected(net, out_size, scope='fc')
 
         return net
