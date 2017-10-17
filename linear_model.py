@@ -475,6 +475,7 @@ class LogisticRegression(object):
                     aggregation_method=tf.AggregationMethod.DEFAULT)
                 )
 
+            # loss = tf.scalar_mul(1.0 / num_parallelism, tf.add_n(tower_losses))
             loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
             pred_prob = tf.concat(tower_pred_prob, 0, name='pred_probability')
             pred_labels = tf.concat(tower_pred_labels, 0, name='pred_labels')

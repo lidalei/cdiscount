@@ -107,12 +107,14 @@ def tr_data_conv_fn(images, **kwargs):
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool4')
 
         net = slim.conv2d(net, 256, [3, 3], scope='conv5')
+        net = slim.conv2d(net, 256, [3, 3], scope='conv5_2')
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool5')
 
         net = slim.flatten(net, scope='flatten')
 
         out_size = 2048
         net = slim.fully_connected(net, out_size, scope='fc')
+        net = slim.fully_connected(net, out_size, scope='fc_2')
 
         return net
 
