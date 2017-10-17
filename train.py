@@ -110,11 +110,11 @@ def tr_data_conv_fn(images, **kwargs):
         net = slim.conv2d(net, 256, [3, 3], scope='conv5_2')
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool5')
 
-        net = slim.flatten(net, scope='flatten')
-
         out_size = 2048
-        net = slim.fully_connected(net, out_size, scope='fc')
-        net = slim.fully_connected(net, out_size, scope='fc_2')
+        net = slim.conv2d(net, out_size, net.shape[1:-1], padding='VALID', scope='fc')
+        net = slim.conv2d(net, out_size, [1, 1], scope='fc_2')
+
+        net = tf.squeeze(net, axis=[1, 2], name='flatten')
 
         return net
 
