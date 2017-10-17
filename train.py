@@ -110,7 +110,7 @@ def tr_data_conv_fn(images, **kwargs):
         net = slim.conv2d(net, 256, [3, 3], scope='conv5_2')
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool5')
 
-        out_size = 2048
+        out_size = 4096
         net = slim.conv2d(net, out_size, net.shape[1:-1], padding='VALID', scope='fc')
         net = slim.conv2d(net, out_size, [1, 1], scope='fc_2')
 
@@ -204,7 +204,7 @@ def main(unused_argv):
 
     # TODO, Change Me!
     tr_data_fn = tr_data_conv_fn
-    tr_data_paras = {'reshape': True, 'size': 2048}
+    tr_data_paras = {'reshape': True, 'size': 4096}
 
     train_data_pipeline = DataPipeline(reader=reader,
                                        data_pattern=FLAGS.train_data_pattern,
