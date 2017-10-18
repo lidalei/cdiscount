@@ -101,9 +101,11 @@ def tr_data_conv_fn(images, **kwargs):
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool2')
 
         net = slim.conv2d(net, 128, [3, 3], scope='conv3')
+        net = slim.conv2d(net, 128, [3, 3], scope='conv3_2')
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool3')
 
         net = slim.conv2d(net, 256, [3, 3], scope='conv4')
+        net = slim.conv2d(net, 256, [3, 3], scope='conv4_2')
         net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='max_pool4')
 
         net = slim.conv2d(net, 256, [3, 3], scope='conv5')
