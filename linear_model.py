@@ -414,10 +414,11 @@ class LogisticRegression(object):
         # Get training data, multi-label
         id_batch, raw_features_batch, labels_batch = get_input_data_tensors(
             self.train_data_pipeline, onehot_label=self.multi_label is True,
-            shuffle=True, num_epochs=self.epochs, name_scope='Input')
+            shuffle=True, num_epochs=self.epochs, fixed_batch_size=True,
+            name_scope='Input')
 
         with tf.name_scope('Split'):
-            num_parallelism = 1
+            num_parallelism = 4
             raw_features_batch_splits = tf.split(raw_features_batch, num_parallelism, axis=0)
             labels_batch_splits = tf.split(labels_batch, num_parallelism, axis=0)
 
@@ -426,14 +427,16 @@ class LogisticRegression(object):
             tower_losses = []
             tower_pred_prob, tower_pred_labels = [], []
             tower_gradients_w, tower_gradients = [], []
+            gate = None
             for i in range(num_parallelism):
                 # Perform the feature transformation.
-                if self.tr_data_fn is None:
-                    i_tr_features = tf.identity(raw_features_batch_splits[i])
-                else:
-                    i_tr_features = self.tr_data_fn(raw_features_batch_splits[i],
-                                                    **{**self.tr_data_paras,
-                                                       'reuse': True if i > 0 else None})
+                with tf.control_dependencies(gate):
+                    if self.tr_data_fn is None:
+                        i_tr_features = tf.identity(raw_features_batch_splits[i])
+                    else:
+                        i_tr_features = self.tr_data_fn(
+                            raw_features_batch_splits[i],
+                            **{**self.tr_data_paras, 'reuse': True if i > 0 else None})
                     # Get the pretrained variables just after creating the transformation!!!
                     # Later operations (e.g., RMSPROP) might add extra variables to the same scope.
                     # This will cause an error while restoring the variables.
@@ -443,9 +446,9 @@ class LogisticRegression(object):
                             tf.GraphKeys.LOCAL_VARIABLES, scope=self.pretrained_scope)
                         logging.debug('pretrained_var_list has {} variables'.format(len(self.pretrained_var_list)))
 
-                i_logits = tf.add(tf.matmul(i_tr_features, weights), biases, name='logits_{}'.format(i+1))
-                i_pred_prob = tf.nn.softmax(i_logits, dim=-1, name='pred_probability_{}'.format(i+1))
-                i_pred_labels = tf.argmax(i_logits, axis=-1, name='pred_labels_{}'.format(i+1))
+                i_logits = tf.add(tf.matmul(i_tr_features, weights), biases, name='logits')
+                i_pred_prob = tf.nn.softmax(i_logits, dim=-1, name='pred_probability')
+                i_pred_labels = tf.argmax(i_logits, axis=-1, name='pred_labels')
 
                 tower_pred_prob.append(i_pred_prob)
                 tower_pred_labels.append(i_pred_labels)
@@ -454,14 +457,14 @@ class LogisticRegression(object):
                     # multi-label classification
                     i_logistic_loss = tf.nn.sigmoid_cross_entropy_with_logits(
                         labels=tf.to_float(labels_batch_splits[i]),
-                        logits=i_logits, name='logistic_loss_{}'.format(i + 1))
+                        logits=i_logits, name='logistic_loss')
                     i_loss_per_example = tf.reduce_sum(
-                        i_logistic_loss, axis=-1, name='loss_per_example_{}'.format(i + 1))
+                        i_logistic_loss, axis=-1, name='loss_per_example')
                 else:
                     i_loss_per_example = tf.nn.sparse_softmax_cross_entropy_with_logits(
                         labels=labels_batch_splits[i], logits=i_logits, name='x_entropy_per_example')
 
-                i_loss = tf.reduce_mean(i_loss_per_example, name='mean_loss_{}'.format(i+1))
+                i_loss = tf.reduce_mean(i_loss_per_example, name='mean_loss')
 
                 tower_losses.append(tf.expand_dims(i_loss, 0))
                 # compute_gradients only return the gradients over given var_list.
@@ -474,6 +477,8 @@ class LogisticRegression(object):
                     i_loss,
                     aggregation_method=tf.AggregationMethod.DEFAULT)
                 )
+
+                gate = [tower_gradients[-1][0][0]]
 
             # loss = tf.scalar_mul(1.0 / num_parallelism, tf.add_n(tower_losses))
             loss = tf.reduce_mean(tf.concat(tower_losses, 0), axis=0, name='loss')
